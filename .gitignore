@@ -1,0 +1,16 @@
+# OSX
+.DS_Store
+
+# Gradle
+.gradle/
+build/
+
+# IDEA
+.idea/
+*.iml
+
+# ignore mri files
+resources/mri
+
+# ignore generated landmark files
+resources/template/*json

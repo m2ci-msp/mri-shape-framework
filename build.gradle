@@ -1,0 +1,146 @@
+buildDir.mkdirs()
+
+ext {
+
+  defaultSettings = file("$rootDir/resources/settings/default.groovy")
+
+  evaluationResourceDir = file("$rootDir/resources/evaluation")
+
+  tongueTemplateName = "tongue_template"
+  palateTemplateName = "palate_template"
+
+  mriDir = file("$rootDir/resources/mri")
+  templateDir = file("$rootDir/resources/template")
+  landmarksTongueDir = file("$rootDir/resources/landmarksTongue")
+  landmarksPalateDir = file("$rootDir/resources/landmarksPalate")
+  Rscripts = file("$rootDir/resources/Rscripts")
+
+  // gather configuration
+  configMap = [:]
+  def slurper = new ConfigSlurper()
+
+    // outer loop -> datasets
+    fileTree("$rootDir/configuration").include("*/dataset.groovy").each{ datasetFile ->
+
+      def dataset = new ConfigSlurper().parse(datasetFile.text)
+
+      // store dataset information
+      configMap["$dataset.dataset.name"] = dataset
+
+      // generate bootstrap configuration
+      (1..dataset.bootstrapTongue.iterations).each{ counter ->
+        def iterationSettings = slurper.parse(dataset.prettyPrint())
+        iterationSettings.bootstrapTongue.counter = counter
+        iterationSettings.bootstrapPalate.counter = counter
+        configMap["$counter-$dataset.dataset.name"] = iterationSettings
+      }
+
+      // inner loop -> speakers of the dataset
+      dataset.dataset.speakers.each{ speaker ->
+
+        // parse speaker file
+        def speakerFile = file("${datasetFile.parentFile}/${speaker}/speaker.groovy")
+        def config = new ConfigSlurper().parse(speakerFile.text)
+
+        // apply default settings
+        def baseSettings = slurper.parse(defaultSettings.text)
+
+        // merge speaker specific settings
+        def settingsFile = file("$datasetFile.parentFile/$speaker/settings.groovy")
+        baseSettings.merge(slurper.parse(settingsFile.text))
+
+        // get base settings
+        baseSettings.speaker.name = config.speaker.name
+        baseSettings.speaker.palateScan = config.speaker.palateScan
+        baseSettings.speaker.basePath = "$dataset.dataset.name/$config.speaker.name"
+        baseSettings.speaker.dataset = dataset.dataset
+        baseSettings.speaker.session = config.speaker.session
+
+        configMap["$dataset.dataset.name-$config.speaker.name"] = baseSettings
+
+        // add palate scan to scans
+        def scans = config.speaker.scans.clone()
+        scans.add(config.speaker.palateScan)
+
+        // create settings for each scan
+        scans.each{ scan ->
+
+          def scanSettings = slurper.parse(baseSettings.toProperties())
+          def scanFolder = file("$speakerFile.parentFile/$scan")
+
+          // merge scan specific settings if present
+          fileTree(scanFolder){
+            include "*.groovy"
+          }.each {
+            scanSettings.merge(slurper.parse(it.text))
+          }
+
+          // set scan number, name of speaker, and type of scan
+          scanSettings.speaker.scan = scan
+          scanSettings.speaker.name = config.speaker.name
+          scanSettings.speaker.type = dataset.dataset.type
+
+          // build path
+          scanSettings.speaker.scanPath = "$dataset.dataset.name/$config.speaker.name/$scan"
+
+          configMap["$dataset.dataset.name-$config.speaker.name-$scan"] = scanSettings
+
+          // generate bootstrap configuration
+          (1..dataset.bootstrapTongue.iterations).each{ counter ->
+            def iterationSettings = slurper.parse(scanSettings.toProperties())
+            iterationSettings.bootstrapTongue.counter = counter
+            iterationSettings.bootstrapTongue.iterations = dataset.bootstrapTongue.iterations
+            iterationSettings.bootstrapPalate.counter = counter
+            iterationSettings.bootstrapPalate.iterations = dataset.bootstrapPalate.iterations
+            configMap["$counter-$dataset.dataset.name-$config.speaker.name-$scan"] = iterationSettings
+          }
+        } // end scans
+      } // end speakers
+    } // end datasets
+} // end ext
+
+task createTongueTemplateLandmarks {
+
+  description = "Extracts landmarks from the tongue template blend file."
+
+  def inputFile = file("$templateDir/${tongueTemplateName}.blend")
+  def outputFile = file("$buildDir/landmarksTongue.json")
+
+  inputs.file inputFile
+  outputs.file outputFile
+
+  doLast{
+
+    outputFile.parentFile.mkdirs()
+
+    exec{
+      commandLine "./extract_landmarks.py --input $inputFile --output $outputFile".tokenize()
+      workingDir "$templateDir"
+    }
+  }
+
+}
+
+task createPalateTemplateLandmarks {
+
+  description = "Extracts landmarks from the palate template blend file."
+
+  def inputFile = file("$templateDir/${palateTemplateName}.blend")
+  def outputFile = file("$buildDir/landmarksPalate.json")
+
+  inputs.file inputFile
+  outputs.file outputFile
+
+  doLast{
+
+    exec{
+      commandLine "./extract_landmarks.py --input $inputFile --output $outputFile".tokenize()
+      workingDir "$templateDir"
+    }
+  }
+
+}
+
+task wrapper(type: Wrapper) {
+  gradleVersion = '3.5'
+}

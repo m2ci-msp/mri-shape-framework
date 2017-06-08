@@ -1,0 +1,869 @@
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath group: 'org.yaml', name: 'snakeyaml', version: '1.18'
+  }
+}
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import org.yaml.snakeyaml.Yaml
+
+
+// create tasks for subprojects
+subprojects { subproject ->
+
+  // get right configuration for the subproject
+  def config = rootProject.ext.configMap["$subproject.name"]
+
+  task createMissing {
+    description = "Reconstruct missing data of the dataset."
+
+    def dataset = config.dataset
+
+    def phonemesFile = file("$rootProject.rootDir/configuration/$dataset.name/database.json")
+    def slurper = new groovy.json.JsonSlurper()
+    def phonemes = slurper.parse(phonemesFile)
+    def missing = phonemes.findAll { it.missing == true }
+
+    // task uses all data that belongs to present phonemes
+    phonemes.findAll { it.missing == false }.each { entry ->
+      inputs.file("$rootProject.buildDir/$dataset.name/$entry.speaker/$entry.id/mapTongueToPalate/mapped.ply")
+      dependsOn ":projects:tongue:$dataset.name-$entry.speaker-$entry.id:mapTongueToProcrustesPalate"
+    }
+
+    missing.each{ entry ->
+      outputs.file("$rootProject.buildDir/$dataset.name/$entry.speaker/$entry.id/mapTongueToPalate/mapped.ply")
+    }
+
+    doLast{
+
+      missing.each{ phoneme ->
+
+        def otherSpeaker =
+          ( phonemes.findAll { it.missing == false && it.prompt == phoneme.prompt } ).collect {
+            "$rootProject.buildDir/$dataset.name/$it.speaker/$it.id/mapTongueToPalate/mapped.ply"
+          }.join(' ')
+
+          def sameSpeaker = ( phonemes.findAll { it.missing == false && it.speaker == phoneme.speaker } ).collect {
+            "$rootProject.buildDir/$dataset.name/$it.speaker/$it.id/mapTongueToPalate/mapped.ply"
+          }.join(' ')
+
+          def output = file("$rootProject.buildDir/$dataset.name/$phoneme.speaker/$phoneme.id/mapTongueToPalate/mapped.ply")
+          def palate = file("$rootProject.buildDir/$dataset.name/$phoneme.speaker/palate/procrustes.ply")
+
+          def otherSpeakerAverage = File.createTempFile("temp",".tmp.ply")
+          def sameSpeakerAverage = File.createTempFile("temp",".tmp.ply")
+
+          def command = "mesh-average --input $otherSpeaker --output $otherSpeakerAverage"
+          logger.debug(command)
+
+          exec{
+            commandLine command.tokenize()
+            workingDir rootProject.buildDir
+          }
+
+          command =  "mesh-average --input $sameSpeaker --output $sameSpeakerAverage"
+          logger.debug(command)
+
+          exec{
+            commandLine command.tokenize()
+            workingDir rootProject.buildDir
+          }
+
+          output.parentFile.mkdirs()
+
+          command = "mesh-average --input $otherSpeakerAverage $sameSpeakerAverage --output $output"
+          logger.debug(command)
+
+          exec{
+            commandLine command.tokenize()
+            workingDir rootProject.buildDir
+          }
+
+          otherSpeakerAverage.delete()
+          sameSpeakerAverage.delete()
+
+
+      } // end missing
+    } // end doLast
+  } // end task
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task createProcrustesPalates {
+
+    description = "Creates Procrustes aligned versions of all palates."
+
+    def dataset = config.dataset
+
+    def originIndex = config.procrustesPalate.originIndex
+    def iter = config.procrustesPalate.iter
+
+    dataset.speakers.each{ speaker ->
+
+      def speakerSettings = rootProject.ext.configMap["$dataset.name-$speaker"].speaker
+      def palateScan = speakerSettings.palateScan
+      def basePath = "$rootProject.buildDir/$dataset.name/$speaker/$palateScan"
+
+      dependsOn ":projects:palate:$dataset.name-$speaker-$palateScan:matchPalate"
+
+      inputs.file "$basePath/matchPalate/tracking_org_result0.ply"
+      outputs.file "$basePath/procrustesPalate/procrustes.ply"
+    }
+
+    doLast{
+
+      // ensure that output directories exist
+      outputs.files.each{ it.parentFile.mkdirs() }
+
+      def inputString = inputs.files.join(' ')
+      def outputString = outputs.files.join(' ')
+
+      def cmd = "procrustes-alignment --input $inputString --output $outputString --noScaling --iter $iter --originIndex $originIndex --mapping ZXY --yFactor -1 --zFactor -1"
+
+      exec{
+        commandLine cmd.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task createTongueTrainingFile{
+
+    description = "Creates tongue model training file."
+
+    def dataset = config.dataset
+
+    def databaseFile = file("$rootProject.rootDir/configuration/$dataset.name/database.json")
+    def trainingFile = file("$rootProject.buildDir/$dataset.name/training/tongue_training.yaml")
+
+    inputs.file databaseFile
+    outputs.file trainingFile
+
+    doLast{
+
+      trainingFile.parentFile.mkdirs()
+
+      def slurper = new groovy.json.JsonSlurper()
+
+      def database = slurper.parse(databaseFile)
+
+      def speakers = database.collect{it.speaker}.unique().sort()
+
+      def phonemes = database.collect{it.prompt}.unique()
+
+      def trainingList = []
+
+      speakers.each{ speakerName ->
+
+        def speakerMap = [:]
+        speakerMap["name"] = speakerName
+        def myPhonemes = database.findAll{it.speaker == speakerName}.sort{it.prompt}
+        def speakerPhonemes = []
+        myPhonemes.each{ phoneme ->
+
+          def entry = [:]
+          entry["prompt"] = phoneme.prompt
+          entry["path"] = new String("$rootProject.buildDir/$dataset.name/$phoneme.speaker/$phoneme.id/mapTongueToPalate/mapped.ply")
+          speakerPhonemes.add(entry)
+
+        }
+
+        speakerMap["phonemes"] = speakerPhonemes
+
+        trainingList.add(speakerMap)
+
+      }
+
+      def meta = [:]
+      meta["speakerAmount"] = speakers.size()
+      meta["phonemeAmount"] = phonemes.size()
+
+      def root = [:]
+      root["meta"] = meta
+      root["data"] = trainingList
+
+      def yaml = new Yaml()
+
+      trainingFile.withWriter{ writer ->
+        writer << yaml.dump(root)
+      }
+
+    }
+
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task createTongueModel {
+    description = "Creates tongue model."
+
+    def dataset = config.dataset
+
+    dependsOn "createMissing"
+    dependsOn createTongueTrainingFile
+
+    def trainingFile = file("$rootProject.buildDir/$dataset.name/training/tongue_training.yaml")
+    def modelFile = file("$rootProject.buildDir/$dataset.name/model/tongue_model.yaml")
+
+    inputs.file trainingFile
+    outputs.file modelFile
+
+    doLast{
+
+      modelFile.parentFile.mkdirs()
+
+      def command = "model-builder --samples $trainingFile --output $modelFile"
+
+      exec{
+        commandLine command.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task evaluateSpecificity{
+
+    def dataset = config.dataset
+    def samples = config.evaluation.samples
+    def priorSize = config.evaluation.priorSize
+    def truncatedSpeaker = config.evaluation.truncatedSpeaker
+    def truncatedPhoneme = config.evaluation.truncatedPhoneme
+    def subsets = config.evaluation.subsets
+
+    def selectedIteration = config.bootstrapTongue.selectedIteration
+
+    def training = "$rootProject.buildDir/$dataset.name/bootstrapTongue/$selectedIteration/training/tongue_training.yaml"
+
+    def output = file("$rootProject.buildDir/$dataset.name/evaluation/specificity")
+
+    subsets.each{
+      outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/specificity_${it}_speaker.json")
+      outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/specificity_${it}_speaker.pdf")
+      outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/specificity_${it}_phoneme.json")
+      outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/specificity_${it}_phoneme.pdf")
+    }
+
+    inputs.file training
+
+    dependsOn ":projects:bootstrapTongue:main:$selectedIteration-$dataset.name:createTongueModel"
+
+    doLast{
+
+      def subsetString = subsets.collect{"${it}.json"}.join(' ')
+
+      output.parentFile.mkdirs()
+      def flags = "\
+                   --truncatedSpeaker $truncatedSpeaker       \
+                   --truncatedPose $truncatedPhoneme          \
+                   --sampleAmount $samples                    \
+                   --input $training                          \
+                   --subsets $subsetString                    \
+                   --evaluateFixedPhoneme                     \
+                   --output $output"
+
+      logger.debug("measure-specificity $flags")
+      logging.captureStandardOutput LogLevel.DEBUG
+
+      exec{
+        commandLine "measure-specificity $flags".tokenize()
+        workingDir rootProject.ext.evaluationResourceDir
+      }
+
+      subsets.add("all")
+
+      subsets.each{ subset ->
+
+        ["speaker", "phoneme"].each{ type ->
+          def inputFile = file("$rootProject.buildDir/$dataset.name/evaluation/specificity_${subset}_${type}.json")
+          def outputFile = file("$rootProject.buildDir/$dataset.name/evaluation/specificity_${subset}_${type}.pdf")
+
+          exec{
+            commandLine "Rscript ribbonPlotter.R $inputFile $outputFile".tokenize()
+            workingDir file("$rootProject.ext.Rscripts")
+          }
+
+        }
+
+      }
+
+    }
+
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task evaluateGeneralization{
+
+    def dataset = config.dataset
+    def priorSize = config.evaluation.priorSize
+    def convergenceFactor = config.evaluation.convergenceFactor
+    def projectedGradientTolerance = config.evaluation.projectedGradientTolerance
+    def maxFunctionEvals = config.evaluation.maxFunctionEvals
+
+    def truncatedSpeaker = config.evaluation.truncatedSpeaker
+    def truncatedPhoneme = config.evaluation.truncatedPhoneme
+
+    def selectedIteration = config.bootstrapTongue.selectedIteration
+
+    def training = "$rootProject.buildDir/$dataset.name/bootstrapTongue/$selectedIteration/training/tongue_training.yaml"
+
+    def output = file("$rootProject.buildDir/$dataset.name/evaluation/generalization")
+
+    outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/generalization_speaker.json")
+    outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/generalization_speaker.pdf")
+    outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/generalization_phoneme.json")
+    outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/generalization_phoneme.pdf")
+
+    inputs.file training
+
+    dependsOn ":projects:bootstrapTongue:main:$selectedIteration-$dataset.name:createTongueModel"
+
+    doLast{
+
+      output.parentFile.mkdirs()
+      def flags = "\
+                   --input $training                                    \
+                   --priorSize $priorSize                               \
+                   --convergenceFactor $convergenceFactor               \
+                   --projectedGradientTolerance $projectedGradientTolerance \
+                   --maxFunctionEvals $maxFunctionEvals                 \
+                   --restrictedSpeaker $truncatedSpeaker                \
+                   --restrictedPhoneme $truncatedPhoneme                \
+                   --output $output"
+
+      logger.debug("measure-generalization $flags")
+      logging.captureStandardOutput LogLevel.DEBUG
+
+      exec{
+        commandLine "measure-generalization $flags".tokenize()
+        workingDir output.parentFile
+      }
+
+      ["speaker", "phoneme"].each{ type ->
+        def inputFile = file("$rootProject.buildDir/$dataset.name/evaluation/generalization_${type}.json")
+        def outputFile = file("$rootProject.buildDir/$dataset.name/evaluation/generalization_${type}.pdf")
+
+        exec{
+          commandLine "Rscript ribbonPlotter.R $inputFile $outputFile".tokenize()
+          workingDir file("$rootProject.ext.Rscripts")
+        }
+
+      }
+
+    }
+
+  }
+
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task evaluateCompactness{
+
+    def dataset = config.dataset
+
+    def selectedIteration = config.bootstrapTongue.selectedIteration
+
+    def training = "$rootProject.buildDir/$dataset.name/bootstrapTongue/$selectedIteration/training/tongue_training.yaml"
+
+    def output = file("$rootProject.buildDir/$dataset.name/evaluation/compactness")
+    outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/compactness_speaker.json")
+    outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/compactness_speaker.pdf")
+    outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/compactness_phoneme.json")
+    outputs.file file("$rootProject.buildDir/$dataset.name/evaluation/compactness_phoneme.pdf")
+
+    inputs.file training
+
+    dependsOn ":projects:bootstrapTongue:main:$selectedIteration-$dataset.name:createTongueModel"
+
+    doLast{
+
+      output.parentFile.mkdirs()
+      def flags = "\
+                   --input $training \
+                   --output $output"
+
+      logger.debug("measure-compactness $flags")
+      logging.captureStandardOutput LogLevel.DEBUG
+
+      exec{
+        commandLine "measure-compactness $flags".tokenize()
+        workingDir output.parentFile
+      }
+
+      ["speaker", "phoneme"].each{ type ->
+        def inputFile = file("$rootProject.buildDir/$dataset.name/evaluation/compactness_${type}.json")
+        def outputFile = file("$rootProject.buildDir/$dataset.name/evaluation/compactness_${type}.pdf")
+
+        exec{
+          commandLine "Rscript compactnessPlotter.R $inputFile $outputFile".tokenize()
+          workingDir file("$rootProject.ext.Rscripts")
+        }
+
+      }
+
+    }
+
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task createFinalModel{
+
+    description = "Creates the final (possibly truncated) tongue model in YAML and JSON format."
+
+    def dataset = config.dataset
+
+    def selectedIteration = config.bootstrapTongue.selectedIteration
+
+    def truncatedSpeaker = config.finalModel.truncatedSpeaker
+    def truncatedPhoneme = config.finalModel.truncatedPhoneme
+
+    def training = "$rootProject.buildDir/$dataset.name/bootstrapTongue/$selectedIteration/training/tongue_training.yaml"
+
+    def outputYAML = file("$rootProject.buildDir/$dataset.name/finalModel/tongue_model.yaml")
+    def outputJSON = file("$rootProject.buildDir/$dataset.name/finalModel/tongue_model.json")
+
+    inputs.file training
+    outputs.files outputYAML, outputJSON
+
+    dependsOn ":projects:bootstrapTongue:main:$selectedIteration-$dataset.name:createTongueModel"
+
+    doLast{
+
+      outputYAML.parentFile.mkdirs()
+
+      // create version in YAML format
+      def flags = "--samples $training                  \
+        --truncatedSpeaker $truncatedSpeaker            \
+        --truncatedPhoneme $truncatedPhoneme            \
+        --output $outputYAML"
+
+      exec{
+        commandLine "model-builder $flags".tokenize()
+        workingDir rootProject.buildDir
+      }
+
+
+      // create version in JSON format
+      def yaml = new Yaml()
+      def model = yaml.load(outputYAML.text);
+
+      def builder = new groovy.json.JsonBuilder()
+
+      def json = [:]
+      json["Dimensions"] = model["Dimensions"]
+      json["ShapeSpace"] = model["ShapeSpace"]
+      json["MeanWeights"] = model["MeanWeights"]
+
+      // read core tensor
+      def coreTensorBuffer =
+        ByteBuffer.wrap(model["CoreTensor"]).order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer()
+      def coreTensor = []
+
+      (1 .. coreTensorBuffer.capacity()).each{
+        coreTensor.add(coreTensorBuffer.get())
+      }
+
+      json["CoreTensor"] = coreTensor
+
+      builder(json)
+
+      outputJSON.withWriter{
+        it << builder.toPrettyString()
+      } // end withWriter
+
+    } // end doLast
+
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task createFinalPalateModel{
+
+    description = "Creates the final (possibly truncated) palate model in YAML and JSON format."
+
+    def dataset = config.dataset
+
+    def selectedIteration = config.bootstrapPalate.selectedIteration
+
+    def truncatedSpeaker = config.finalPalateModel.truncatedSpeaker
+
+    def training = "$rootProject.buildDir/$dataset.name/bootstrapPalate/$selectedIteration/training/palate_training.yaml"
+
+    def outputYAML = file("$rootProject.buildDir/$dataset.name/finalPalateModel/palate_model.yaml")
+    def outputJSON = file("$rootProject.buildDir/$dataset.name/finalPalateModel/palate_model.json")
+
+    inputs.file training
+    outputs.files outputYAML, outputJSON
+
+    dependsOn ":projects:bootstrapPalate:main:$selectedIteration-$dataset.name:createPalateModel"
+
+    doLast{
+
+      outputYAML.parentFile.mkdirs()
+
+      // create version in YAML format
+      def flags = "--samples $training                  \
+        --truncatedSpeaker $truncatedSpeaker            \
+        --output $outputYAML"
+
+      exec{
+        commandLine "model-builder $flags".tokenize()
+        workingDir rootProject.buildDir
+      }
+
+
+      // create version in JSON format
+      def yaml = new Yaml()
+      def model = yaml.load(outputYAML.text);
+
+      def builder = new groovy.json.JsonBuilder()
+
+      def json = [:]
+      json["Dimensions"] = model["Dimensions"]
+      json["ShapeSpace"] = model["ShapeSpace"]
+      json["MeanWeights"] = model["MeanWeights"]
+
+      // read core tensor
+      def coreTensorBuffer =
+        ByteBuffer.wrap(model["CoreTensor"]).order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer()
+      def coreTensor = []
+
+      (1 .. coreTensorBuffer.capacity()).each{
+        coreTensor.add(coreTensorBuffer.get())
+      }
+
+      json["CoreTensor"] = coreTensor
+
+      builder(json)
+
+      outputJSON.withWriter{
+        it << builder.toPrettyString()
+      } // end withWriter
+
+    } // end doLast
+
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task evaluateModel{
+
+    dependsOn evaluateSpecificity
+    dependsOn evaluateGeneralization
+    dependsOn evaluateCompactness
+
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task createPalateHTML {
+
+    description = "Create webpage summarizing the palate visualizations."
+
+    def dataset = config.dataset
+
+    def phonemesFile = file("$rootProject.rootDir/configuration/$dataset.name/database.json")
+    def slurper = new groovy.json.JsonSlurper()
+    def phonemes = slurper.parse(phonemesFile)
+
+    phonemes.findAll{it.missing == false}.each{
+      dependsOn ":projects:tongue:$dataset.name-$it.speaker-$it.id:visualizePalateProjection"
+    }
+
+    def outputPath =
+      file("$rootProject.buildDir/$dataset.name/palateHtml")
+
+      def outputFile = file("$outputPath/index.html")
+
+        doLast {
+
+          outputFile.parentFile.mkdirs()
+
+          def files = fileTree(rootDir) {
+            include "configuration/$dataset.name/*/speaker.groovy"
+          }
+
+          def fileSet = files.files as SortedSet
+
+          outputFile.withWriter{ w ->
+
+            w << "<html>\n"
+            w << "<head>\n"
+            w << "<h1>Projections</h1>\n"
+            w << "<style> table, th, td {border: 1px solid black; border-collapse: collapse;} th, td {padding: 15px; text-align:center;} </style>"
+            w << "</head><body>"
+
+            fileSet.each{ speaker ->
+              // read meta information of speaker
+              def slurper2 = new ConfigSlurper()
+              def configuration =  slurper2.parse(speaker.text)
+
+              def name = configuration.speaker.name
+
+              w << "<h3>${configuration.speaker.name}</h3>\n"
+              w << "<table>\n"
+
+              def baseDir = file("$rootProject.buildDir/$dataset.name/$name/")
+              w << "<tr style=\"text-align:center\" >\n"
+              w << "<td>scan_id</td>\n"
+              w << "<td>xy view</td>\n"
+              w << "<td>zx view</td>\n"
+              w << "<td>yz view</td>\n"
+              w << "</tr>\n"
+
+              configuration.speaker.scans.each{ scan ->
+                w << "<tr>\n"
+
+                def projections = file("$baseDir/${scan}/visualizePalateProjection/")
+                def imageDir = file("${outputPath}/images/${name}/${scan}")
+
+                // copy slice projections
+                copy{
+                  from projections
+                  into imageDir
+                  include "*.png"
+                }
+
+                w << "<td>${scan}</td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_2.png\"/>\n\
+                </td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_2.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_3.png\"/>\n\
+                </td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_2.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_3.png\"/>\n\
+                </td>\n"
+                w << "</tr>\n"
+              }
+
+              w << "</table>\n"
+            }
+
+            w << "</body></html>"
+          }
+
+
+        } // end doLast
+
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task createHTML {
+
+    description = "Create webpage summarizing the visualizations."
+
+    def dataset = config.dataset
+
+    def phonemesFile = file("$rootProject.rootDir/configuration/$dataset.name/database.json")
+    def slurper = new groovy.json.JsonSlurper()
+    def phonemes = slurper.parse(phonemesFile)
+
+    phonemes.findAll{it.missing == false}.each{
+      dependsOn ":projects:tongue:$dataset.name-$it.speaker-$it.id:visualizeTongueProjection"
+    }
+
+    dependsOn "createTongueModel"
+
+    def outputPath =
+      file("$rootProject.buildDir/$dataset.name/html")
+
+      def outputFile = file("$outputPath/index.html")
+
+        doLast {
+
+          outputFile.parentFile.mkdirs()
+
+          def files = fileTree(rootDir) {
+            include "configuration/$dataset.name/*/speaker.groovy"
+          }
+
+          def fileSet = files.files as SortedSet
+
+          outputFile.withWriter{ w ->
+
+            w << "<html>\n"
+            w << "<head>\n"
+            w << "<h1>Projections</h1>\n"
+            w << "<style> table, th, td {border: 1px solid black; border-collapse: collapse;} th, td {padding: 15px; text-align:center;} </style>"
+            w << "</head><body>"
+
+            fileSet.each{ speaker ->
+              // read meta information of speaker
+              def slurper2 = new ConfigSlurper()
+              def configuration =  slurper2.parse(speaker.text)
+
+              def name = configuration.speaker.name
+
+              w << "<h3>${configuration.speaker.name}</h3>\n"
+              w << "<table>\n"
+
+              def baseDir = file("$rootProject.buildDir/$dataset.name/$name/")
+              w << "<tr style=\"text-align:center\" >\n"
+              w << "<td>scan_id</td>\n"
+              w << "<td>xy view</td>\n"
+              w << "<td>zx view</td>\n"
+              w << "<td>yz view</td>\n"
+              w << "</tr>\n"
+
+              configuration.speaker.scans.each{ scan ->
+                w << "<tr>\n"
+
+                def projections = file("$baseDir/${scan}/visualizeTongueProjection/")
+                def imageDir = file("${outputPath}/images/${name}/${scan}")
+
+                // copy slice projections
+                copy{
+                  from projections
+                  into imageDir
+                  include "*.png"
+                }
+
+                w << "<td>${scan}</td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_2.png\"/>\n\
+                </td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_2.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_3.png\"/>\n\
+                </td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_2.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_3.png\"/>\n\
+                </td>\n"
+                w << "</tr>\n"
+              }
+
+              w << "</table>\n"
+            }
+
+            w << "</body></html>"
+          }
+
+        } // end doLast
+
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task createPalateTrainingFile {
+
+    description = "Creates palate training file."
+
+    def dataset = config.dataset
+
+    def databaseFile = file("$rootProject.rootDir/configuration/$dataset.name/palateDatabase.json")
+    def trainingFile = file("$rootProject.buildDir/$dataset.name/training/palate_training.yaml")
+
+    inputs.file databaseFile
+    outputs.file trainingFile
+
+    doLast{
+
+      trainingFile.parentFile.mkdirs()
+
+      def slurper = new groovy.json.JsonSlurper()
+
+      def database = slurper.parse(databaseFile)
+
+      def speakers = database.collect{it.speaker}.unique().sort()
+
+      def phonemes = database.collect{it.prompt}.unique()
+
+
+      def trainingList = []
+
+      speakers.each{ speakerName ->
+
+        def speakerMap = [:]
+        speakerMap["name"] = speakerName
+        def myPhonemes = database.findAll{it.speaker == speakerName}.sort{it.prompt}
+        def speakerPhonemes = []
+        myPhonemes.each{ phoneme ->
+
+          def entry = [:]
+          entry["prompt"] = phoneme.prompt
+          entry["path"] = new String("$rootProject.buildDir/$dataset.name/$phoneme.speaker/$phoneme.id/procrustesPalate/procrustes.ply")
+
+          speakerPhonemes.add(entry)
+
+        }
+
+        speakerMap["phonemes"] = speakerPhonemes
+
+        trainingList.add(speakerMap)
+
+      }
+
+      def meta = [:]
+      meta["speakerAmount"] = speakers.size()
+      meta["phonemeAmount"] = phonemes.size()
+
+      def root = [:]
+      root["meta"] = meta
+      root["data"] = trainingList
+
+      def yaml = new Yaml()
+
+      trainingFile.withWriter{ writer ->
+        writer << yaml.dump(root)
+      }
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task createPalateModel {
+    description = "Creates tongue model."
+
+    def dataset = config.dataset
+
+    dependsOn createProcrustesPalates
+    dependsOn createPalateTrainingFile
+
+    def trainingFile = file("$rootProject.buildDir/$dataset.name/training/palate_training.yaml")
+    def modelFile = file("$rootProject.buildDir/$dataset.name/model/palate_model.yaml")
+
+    inputs.file trainingFile
+    outputs.file modelFile
+
+    doLast{
+
+      modelFile.parentFile.mkdirs()
+
+      def command = "model-builder --samples $trainingFile --output $modelFile"
+
+      exec{
+        commandLine command.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+
+} // end subprojects

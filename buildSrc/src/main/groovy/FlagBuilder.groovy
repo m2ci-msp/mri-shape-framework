@@ -1,0 +1,42 @@
+class FlagBuilder{
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  FlagBuilder() {
+    this.ignored = []
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  def build(flagMap) {
+
+      def flags = []
+
+      flagMap.each{ key, value ->
+        // ignore the 'active' setting
+        if( this.ignored.any{it == key} ) {
+          return
+        }
+        if( value instanceof List ) {
+          value = value.join(' ')
+        }
+        flags.add("--$key $value")
+      }
+
+      return flags
+
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  def ignore(ignored) {
+    this.ignored = ignored
+    return this
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  def ignored
+
+  ///////////////////////////////////////////////////////////////////////////
+}

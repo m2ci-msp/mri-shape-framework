@@ -1,0 +1,53 @@
+// create tasks for subprojects
+subprojects { subproject ->
+  // get right configuration for the subproject
+  def config = rootProject.ext.configMap["$subproject.name"]
+
+  task initPalate {
+    description = "Creates initial data for palate reconstruction."
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.palateScan
+    def dataset = config.speaker.dataset
+    def basePath = config.speaker.basePath
+    def scanPath = "$basePath/$scan/"
+
+    def palateMesh = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
+    def procrustesPalateMesh = file("$rootProject.buildDir/$scanPath/procrustesPalate/procrustes.ply")
+    def palateScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+    def destDir = file("$rootProject.buildDir/$basePath/palate")
+
+    // task depends on the matchPalate and smooth tasks
+    def matchPalate = ":projects:palate:$dataset.name-$speaker-$scan:matchPalate"
+    def smooth = ":projects:shared:$dataset.name-$speaker-$scan:smooth"
+    def procrustesPalates = ":projects:meta:$dataset.name:createProcrustesPalates"
+
+    def bootstrapPalate = rootProject.ext.configMap["$dataset.name"].bootstrapPalate
+
+    // use bootstrapped palate if bootstrapping is active
+    if( bootstrapPalate.active ) {
+
+      def selectedIteration = bootstrapPalate.selectedIteration
+      matchPalate = ":projects:bootstrapPalate:subtasks:$selectedIteration-$dataset.name-$speaker-$scan:matchPalate"
+      procrustesPalates = ":projects:bootstrapPalate:main:$selectedIteration-$dataset.name:createProcrustesPalates"
+      palateMesh = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$selectedIteration/$speaker/$scan/matchPalate/tracking_org_result0.ply")
+      procrustesPalateMesh = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$selectedIteration/$speaker/$scan/procrustesPalate/procrustes.ply")
+    }
+
+    dependsOn matchPalate
+    dependsOn procrustesPalates
+    dependsOn smooth
+
+    inputs.files palateMesh, procrustesPalateMesh, palateScan
+    outputs.dir destDir
+
+    doLast{
+      destDir.mkdirs()
+
+      copy{
+        from inputs.files
+        into destDir
+      }
+    }
+  }
+}

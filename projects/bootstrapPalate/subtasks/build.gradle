@@ -1,0 +1,348 @@
+// create tasks for subprojects
+subprojects { subproject ->
+  // get right configuration for the subproject
+  def config = rootProject.ext.configMap["$subproject.name"]
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task mapCloudToPalate {
+    description = "Maps the point point cloud to procrustes aligned palate."
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def scanPath = config.speaker.scanPath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapPalate.counter
+
+    // point cloud
+    def cloud = file("$rootProject.buildDir/$scanPath/segmentPalate/point_cloud.obj")
+
+    // matched palate
+    def matchedPalate = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
+
+    def procrustesPalate = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/${counter - 1}/$speaker/$scan/procrustesPalate/procrustes.ply")
+
+    // use original palate if bootstrapping has just started
+    if( counter == 1) {
+      procrustesPalate =
+      file("$rootProject.buildDir/$dataset.name/$speaker/$scan/procrustesPalate/procrustes.ply")
+    }
+
+    // output: mapped cloud mesh
+    def mappedCloud = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/mapCloudToPalate/mappedCloud.obj")
+
+    // mapCloudToPalate depends on the segmentPalate, reconstructPalate, and createProcrustesPalates task
+    def procrustes = ":projects:bootstrapPalate:main:${counter-1}-$dataset.name:createProcrustesPalates"
+
+    if( counter == 1) {
+      procrustes = ":projects:meta:$dataset.name:createProcrustesPalates"
+    }
+
+    def segmentPalate = ":projects:palate:$dataset.name-$speaker-$scan:segmentPalate"
+    def matchPalate = ":projects:palate:$dataset.name-$speaker-$scan:matchPalate"
+
+    dependsOn segmentPalate
+    dependsOn matchPalate
+    dependsOn procrustes
+
+    inputs.file cloud
+    inputs.file matchedPalate
+    inputs.file procrustesPalate
+
+    outputs.file mappedCloud
+
+    doLast{
+
+      mappedCloud.getParentFile().mkdirs()
+
+      def cmd = "rigid-alignment --source $matchedPalate --target $procrustesPalate --change $cloud --output $mappedCloud --noScaling"
+
+      logger.debug(cmd)
+
+      exec{
+        commandLine cmd.tokenize()
+        workingDir rootProject.buildDir
+      }
+
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  task mapPalateLandmarksToPalate {
+
+    description = "Maps the landmarks to procrustes aligned palate."
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def dataset = config.speaker.dataset
+    def scanPath = config.speaker.scanPath
+    def counter = config.bootstrapPalate.counter
+
+    // landmarks
+    def landmarksFile = file("$rootProject.buildDir/$scanPath/landmarksPalate/landmarks.json")
+
+    // aligned palate
+    def matchedPalate = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
+
+    def procrustesPalate = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/${counter - 1}/$speaker/$scan/procrustesPalate/procrustes.ply")
+
+    // use original palate if bootstrapping has just started
+    if( counter == 1) {
+      procrustesPalate =
+      file("$rootProject.buildDir/$dataset.name/$speaker/$scan/procrustesPalate/procrustes.ply")
+    }
+
+    // output: mapped landmarks
+    def mappedLandmarks = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/mapPalateLandmarksToPalate/mappedLandmarks.json")
+
+    // mapLandmarksToPalate depends on the landmarksPalate, matchPalate, and createProcrustesPalates task
+    def procrustes = ":projects:bootstrapPalate:main:${counter-1}-$dataset.name:createProcrustesPalates"
+
+    if( counter == 1) {
+      procrustes = ":projects:meta:$dataset.name:createProcrustesPalates"
+    }
+
+
+    def landmarksPalate = ":projects:palate:$dataset.name-$speaker-$scan:landmarksPalate"
+    def matchPalate = ":projects:palate:$dataset.name-$speaker-$scan:matchPalate"
+
+    dependsOn landmarksPalate
+    dependsOn matchPalate
+    dependsOn procrustes
+
+    inputs.file landmarksFile
+    inputs.file matchedPalate
+    inputs.file procrustesPalate
+
+    outputs.file mappedLandmarks
+
+    doLast{
+
+      mappedLandmarks.getParentFile().mkdirs()
+
+      def cmd = "move-landmarks --source $matchedPalate --target $procrustesPalate --landmarks $landmarksFile --output $mappedLandmarks"
+      logger.debug(cmd)
+
+      exec{
+        commandLine cmd.tokenize()
+        workingDir rootProject.buildDir
+      }
+
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  // fit current statistical model to point cloud
+  task fitPalate {
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def scanPath = config.speaker.scanPath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapPalate.counter
+
+    // get settings
+    def searchRadius = config.speaker.fitPalateModel.searchRadius
+    def iterationAmount = config.speaker.fitPalateModel.iterationAmount
+    def priorSize = config.speaker.fitPalateModel.priorSize
+    def convergenceFactor = config.speaker.fitPalateModel.convergenceFactor
+    def projectedGradientTolerance = config.speaker.fitPalateModel.projectedGradientTolerance
+    def maxFunctionEvals = config.speaker.fitPalateModel.maxFunctionEvals
+
+    def maxAngle = config.speaker.fitPalateModel.maxAngle
+    def maxDistance = config.speaker.fitPalateModel.maxDistance
+
+    if( counter == 1){
+      dependsOn ":projects:meta:$dataset.name:createPalateModel"
+    }
+    else {
+      dependsOn ":projects:bootstrapPalate:main:${counter-1}-$dataset.name:createPalateModel"
+    }
+
+    dependsOn "mapCloudToPalate"
+    dependsOn "mapPalateLandmarksToPalate"
+
+    def pointCloud = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/mapCloudToPalate/mappedCloud.obj")
+    def landmarkFile = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/mapPalateLandmarksToPalate/mappedLandmarks.json")
+
+    def modelFile
+
+    if( counter == 1 ) {
+      modelFile = file("$rootProject.buildDir/$dataset.name/model/palate_model.yaml")
+    }
+    else {
+      modelFile = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/${counter-1}/model/palate_model.yaml")
+    }
+
+    def destFile = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/fitPalate/fitted.ply")
+
+
+    inputs.file pointCloud
+    inputs.file landmarkFile
+
+    outputs.file destFile
+
+    doLast{
+      destFile.parentFile.mkdirs()
+
+      def flags = "\
+                   --searchRadius $searchRadius \
+                   --iter $iterationAmount \
+                   --priorSize $priorSize \
+                   --convergenceFactor $convergenceFactor \
+                   --projectedGradientTolerance $projectedGradientTolerance \
+                   --maxFunctionEvals $maxFunctionEvals \
+                   --maxAngle $maxAngle \
+                   --maxDistance $maxDistance \
+                   --model $modelFile \
+                   --landmarks $landmarkFile \
+                   --target $pointCloud \
+                   --output $destFile"
+
+      logger.debug("fit-model $flags")
+      logging.captureStandardOutput LogLevel.DEBUG
+
+
+      exec{
+        commandLine "fit-model $flags".tokenize()
+        workingDir destFile.parentFile
+      }
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task mapPalateBack {
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def scanPath = config.speaker.scanPath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapPalate.counter
+
+    dependsOn "fitPalate"
+
+    def fitted = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/fitPalate/fitted.ply")
+    def mapped = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/mapPalateBack/mapped.ply")
+
+    def matchedPalate = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
+
+    def procrustesPalate = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/${counter - 1}/$speaker/$scan/procrustesPalate/procrustes.ply")
+
+    // use original palate if bootstrapping has just started
+    if( counter == 1) {
+      procrustesPalate =
+      file("$rootProject.buildDir/$dataset.name/$speaker/$scan/procrustesPalate/procrustes.ply")
+    }
+
+    inputs.file fitted
+    outputs.file mapped
+
+    doLast{
+
+      mapped.getParentFile().mkdirs()
+
+      def cmd = "rigid-alignment --target $matchedPalate --source $procrustesPalate --change $fitted --output $mapped --noScaling"
+      logger.debug(cmd)
+
+      exec{
+        commandLine cmd.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // use fitted model as initialization for template matching
+  task matchPalate {
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+
+    def scanPath = config.speaker.scanPath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapPalate.counter
+
+    dependsOn "mapPalateBack"
+
+    // point cloud and landmarks do not change during bootstrap
+    def pointCloud = file("$rootProject.buildDir/$scanPath/segmentPalate/point_cloud.obj")
+    def landmarkFile = file("$rootProject.buildDir/$scanPath/landmarksPalate/landmarks.json")
+
+    // use result of fitting as template
+    def templateFile  = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/mapPalateBack/mapped.ply")
+
+    def destDir = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/matchPalate")
+
+    inputs.file pointCloud
+    outputs.dir destDir
+
+    doLast{
+      destDir.mkdirs()
+
+      def flags = (new FlagBuilder()).build(config.speaker.matchPalate)
+
+      flags.add("--source $templateFile")
+      flags.add("--target $pointCloud")
+      flags.add("--output tracking_org_result0.ply")
+
+      if( landmarkFile.exists() ) {
+        flags.add("--landmarks $landmarkFile")
+      }
+
+      logger.debug("match-template ${flags.join(' ')}")
+
+      exec{
+        commandLine "match-template ${flags.join(' ')}".tokenize()
+        workingDir destDir
+      }
+    }
+  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task projectPalate { task ->
+
+    description = "Projects matched palate to scan."
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+
+    def scanPath = config.speaker.scanPath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapPalate.counter
+
+    // input
+    def matched = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/matchPalate/tracking_org_result0.ply")
+
+    def palateScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+
+    // output
+    def destDir = file("$rootProject.buildDir/$dataset.name/bootstrapPalate/$counter/$speaker/$scan/projectPalate")
+
+    def projected = file("$destDir/projected.json")
+
+    // projectPalate depends on the match task
+    dependsOn "matchPalate"
+
+    inputs.files matched, palateScan
+    outputs.file projected
+
+    doLast{
+      destDir.mkdirs()
+
+      def command = "mesh-project --mesh $matched --scan $palateScan --output $projected"
+      logger.debug(command)
+      exec{
+        commandLine command.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+}

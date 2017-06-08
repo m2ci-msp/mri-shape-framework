@@ -1,0 +1,333 @@
+// create tasks for subprojects
+subprojects { subproject ->
+  // get right configuration for the subproject
+  def config = rootProject.ext.configMap["$subproject.name"]
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // fit current statistical model to point cloud
+  task fitTongue {
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def scanPath = config.speaker.scanPath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapTongue.counter
+
+    // get settings
+    def searchRadius = config.speaker.fitModel.searchRadius
+    def iterationAmount = config.speaker.fitModel.iterationAmount
+    def priorSize = config.speaker.fitModel.priorSize
+    def convergenceFactor = config.speaker.fitModel.convergenceFactor
+    def projectedGradientTolerance = config.speaker.fitModel.projectedGradientTolerance
+    def maxFunctionEvals = config.speaker.fitModel.maxFunctionEvals
+
+    def maxAngle = config.speaker.fitModel.maxAngle
+    def maxDistance = config.speaker.fitModel.maxDistance
+
+    if( counter == 1){
+      dependsOn ":projects:meta:$dataset.name:createTongueModel"
+    }
+    else {
+      dependsOn ":projects:bootstrapTongue:main:${counter-1}-$dataset.name:createTongueModel"
+    }
+
+    dependsOn ":projects:tongue:$dataset.name-$speaker-$scan:mapCloudToPalate"
+    dependsOn ":projects:tongue:$dataset.name-$speaker-$scan:mapLandmarksToPalate"
+
+    // point cloud and landmarks do not change during bootstrap
+    def pointCloud = file("$rootProject.buildDir/$scanPath/mapCloudToPalate/mappedCloud.obj")
+    def landmarkFile = file("$rootProject.buildDir/$scanPath/mapLandmarksToPalate/mappedLandmarks.json")
+
+    def modelFile
+
+    if( counter == 1 ) {
+      modelFile = file("$rootProject.buildDir/$dataset.name/model/tongue_model.yaml")
+    }
+    else {
+      modelFile = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/${counter-1}/model/tongue_model.yaml")
+    }
+
+    def destFile = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/fitTongue/fitted.ply")
+
+
+    inputs.file pointCloud
+    inputs.file landmarkFile
+
+    outputs.file destFile
+
+    doLast{
+      destFile.parentFile.mkdirs()
+
+      def flags = "\
+                   --searchRadius $searchRadius \
+                   --iter $iterationAmount \
+                   --priorSize $priorSize \
+                   --convergenceFactor $convergenceFactor \
+                   --projectedGradientTolerance $projectedGradientTolerance \
+                   --maxFunctionEvals $maxFunctionEvals \
+                   --maxAngle $maxAngle \
+                   --maxDistance $maxDistance \
+                   --model $modelFile \
+                   --landmarks $landmarkFile \
+                   --target $pointCloud \
+                   --output $destFile"
+
+      logger.debug("fit-model $flags")
+      logging.captureStandardOutput LogLevel.DEBUG
+
+
+      exec{
+        commandLine "fit-model $flags".tokenize()
+        workingDir destFile.parentFile
+      }
+    }
+  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // map fitted model back to local space
+  task mapTongueToPalate {
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def scanPath = config.speaker.scanPath
+    def basePath = config.speaker.basePath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapTongue.counter
+
+    dependsOn "fitTongue"
+
+    def fitted = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/fitTongue/fitted.ply")
+    def mapped = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/mapTongueToPalate/mapped.ply")
+
+    // aligned palate
+    def alignedPalate = file("$rootProject.buildDir/$scanPath/reconstructPalate/aligned.ply")
+
+    def procrustesPalate = file("$rootProject.buildDir/$basePath/palate/procrustes.ply")
+
+    inputs.file fitted
+    outputs.file mapped
+
+    doLast{
+
+      mapped.getParentFile().mkdirs()
+
+      def cmd = "rigid-alignment --target $alignedPalate --source $procrustesPalate --change $fitted --output $mapped --noScaling"
+      logger.debug(cmd)
+
+      exec{
+        commandLine cmd.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+
+  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // map matched tongue to procrustes palate
+  task mapTongueToProcrustesPalate {
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def scanPath = config.speaker.scanPath
+    def basePath = config.speaker.basePath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapTongue.counter
+
+
+    // matched template
+    def tongue = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/matchTongue/tracking_org_result0.ply")
+
+    // aligned palate
+    def alignedPalate = file("$rootProject.buildDir/$scanPath/reconstructPalate/aligned.ply")
+
+    def procrustesPalate = file("$rootProject.buildDir/$basePath/palate/procrustes.ply")
+
+    // output: mapped tongue mesh
+    def mappedTongue = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/mapTongueToProcrustesPalate/mapped.ply")
+
+    dependsOn "matchTongue"
+
+    inputs.file tongue
+    inputs.file alignedPalate
+    inputs.file procrustesPalate
+
+    outputs.file mappedTongue
+
+    doLast{
+
+      mappedTongue.getParentFile().mkdirs()
+
+      def cmd = "rigid-alignment --source $alignedPalate --target $procrustesPalate --change $tongue --output $mappedTongue --noScaling"
+      logger.debug(cmd)
+
+      exec{
+        commandLine cmd.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // use fitted model as initialization for template matching
+  task matchTongue {
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+
+    def scanPath = config.speaker.scanPath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapTongue.counter
+
+    dependsOn "mapTongueToPalate"
+
+    // point cloud and landmarks do not change during bootstrap
+    def pointCloud = file("$rootProject.buildDir/$scanPath/purgeCloud/purgedCloud.obj")
+    def landmarkFile = file("$rootProject.buildDir/$scanPath/landmarksTongue/landmarks.json")
+
+    // use result of fitting as template
+    def templateFile  = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/mapTongueToPalate/mapped.ply")
+
+    def destDir = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/matchTongue")
+
+    inputs.file pointCloud
+    outputs.dir destDir
+
+    doLast{
+      destDir.mkdirs()
+
+      def flags = (new FlagBuilder()).build(config.speaker.match)
+
+      flags.add("--source $templateFile")
+      flags.add("--target $pointCloud")
+      flags.add("--output tracking_org_result0.ply")
+
+      if( landmarkFile.exists() ) {
+        flags.add("--landmarks $landmarkFile")
+      }
+
+      logger.debug("match-template ${flags.join(' ')}")
+
+      exec{
+        commandLine "match-template ${flags.join(' ')}".tokenize()
+        workingDir destDir
+      }
+    }
+  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task projectTongue { task ->
+
+    description = "Projects matched tongue to scan."
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+
+    def scanPath = config.speaker.scanPath
+    def basePath = config.speaker.basePath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapTongue.counter
+
+    // input
+    def matched = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/matchTongue/tracking_org_result0.ply")
+
+    def tongueScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+
+    // output
+    def destDir = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/projectTongue")
+
+    def projected = file("$destDir/projected.json")
+
+    // projectTongue depends on the match task
+    dependsOn "matchTongue"
+
+    inputs.files matched, tongueScan
+    outputs.file projected
+
+    doLast{
+      destDir.mkdirs()
+
+      def command = "mesh-project --mesh $matched --scan $tongueScan --output $projected"
+      logger.debug(command)
+      exec{
+        commandLine command.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task visualizeTongueProjection {
+
+    description = "Visualizes projection."
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def scanPath = config.speaker.scanPath
+    def dataset = config.speaker.dataset
+    def counter = config.bootstrapTongue.counter
+
+    // input
+    def projected = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/${counter}/$speaker/$scan/projectTongue/projected.json")
+
+    // raw landmarks in image coordinates
+    def landmarksFile = file("$landmarksTongueDir/$scanPath/landmarks.json")
+
+    // output
+    def destDir = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/${counter}/$speaker/$scan/visualizeTongueProjection")
+
+    // visualizeTongueProjection depends on the projectTongue task
+    dependsOn "projectTongue"
+
+    inputs.files projected, landmarksFile
+
+    outputs.dir destDir
+
+    doLast{
+
+      destDir.mkdirs()
+
+      def slurper = new groovy.json.JsonSlurper()
+      def landmarks = slurper.parse(landmarksFile)
+
+      // get three landmarks to use for slice selection
+      def airway = landmarks.find{ it.name == "Airway" }
+      def frontBase = landmarks.find{ it.name == "FrontBaseCenter" }
+      def tip = landmarks.find{ it.name == "Tip" }
+      def surface = landmarks.find{ it.name == "SurfaceCenter" }
+
+      // get boundary coordinate values in z-direction
+      int maxZ = config.speaker.cropToVocalTract.maxZ.toInteger()
+      int minZ = config.speaker.cropToVocalTract.minZ.toInteger()
+
+      // get minimum values for x and y
+      int minX = config.speaker.cropToVocalTract.minX.toInteger()
+      int minY = config.speaker.cropToVocalTract.minY.toInteger()
+
+
+      // use landmarks to select slices, also shift origin
+      int centerX = ( airway.x.toInteger() + frontBase.x.toInteger() - 2 * minX ) / 2
+      int frontX = ( surface.x.toInteger() + frontBase.x.toInteger() - 2 * minX ) / 2
+      int backX = airway.x.toInteger() - minX
+      int midwayX = ( centerX + backX ) / 2
+
+      int bottomY = ( frontBase.y.toInteger() - minY)
+      int centerY = ( tip.y.toInteger() - minY)
+      int midwayY = ( centerY + bottomY) / 2
+      int topY = (surface.y.toInteger() - minY)
+
+      // use slice in the middle along z-axis and two at the sides
+      int centerZ = (maxZ - minZ ) / 2
+
+      // extract slices
+      exec{
+        commandLine "extract-slice --input $projected --xy ${centerZ - 10} ${centerZ} ${centerZ + 10}\
+                     --xz ${bottomY} ${centerY} ${midwayY} ${topY} --yz ${frontX} ${centerX} ${midwayX} ${backX} --output $destDir/slice".tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+}

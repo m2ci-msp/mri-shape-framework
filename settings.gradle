@@ -1,0 +1,53 @@
+// outer loop -> datasets
+fileTree("$rootDir/configuration").include("*/dataset.groovy").each{ datasetFile ->
+
+  // parse dataset file
+  def dataset = new ConfigSlurper().parse(datasetFile.text)
+
+  // create bootstrap main tasks
+  (1..dataset.bootstrapTongue.iterations).each{ counter ->
+    include ":projects:bootstrapTongue:main:$counter-$dataset.dataset.name"
+  }
+
+  if( dataset.bootstrapPalate.active && dataset.bootstrapPalate.iterations > 0 ) {
+    // create palate bootstrap main tasks
+    (1..dataset.bootstrapPalate.iterations).each{ counter ->
+        include ":projects:bootstrapPalate:main:$counter-$dataset.dataset.name"
+    }
+  }
+
+
+  include ":projects:meta:$dataset.dataset.name"
+
+  // inner loop -> speakers of the dataset
+  dataset.dataset.speakers.each{ speaker ->
+
+    // parse speaker file
+    def configuration = new ConfigSlurper().parse(file("${datasetFile.parentFile}/${speaker}/speaker.groovy").text)
+
+    (1..dataset.bootstrapTongue.iterations).each{ counter ->
+      configuration.speaker.scans.each { scan ->
+        include ":projects:bootstrapTongue:subtasks:$counter-$dataset.dataset.name-$configuration.speaker.name-$scan"
+      }
+    }
+
+    if( dataset.bootstrapPalate.active && dataset.bootstrapPalate.iterations > 0 ) {
+        (1..dataset.bootstrapPalate.iterations).each{ counter ->
+            def scan = configuration.speaker.palateScan
+            include ":projects:bootstrapPalate:subtasks:$counter-$dataset.dataset.name-$configuration.speaker.name-$scan"
+        }
+    }
+
+    include ":projects:speaker:$dataset.dataset.name-$configuration.speaker.name"
+
+    configuration.speaker.scans.each { scan ->
+      include ":projects:shared:$dataset.dataset.name-$configuration.speaker.name-$scan"
+      include ":projects:tongue:$dataset.dataset.name-$configuration.speaker.name-$scan"
+    }
+
+    include ":projects:palate:$dataset.dataset.name-$configuration.speaker.name-$configuration.speaker.palateScan"
+    include ":projects:shared:$dataset.dataset.name-$configuration.speaker.name-$configuration.speaker.palateScan"
+
+  } // end inner loop
+
+} // end outer loop

@@ -1,0 +1,310 @@
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath group: 'org.yaml', name: 'snakeyaml', version: '1.18'
+  }
+}
+
+import org.yaml.snakeyaml.Yaml
+
+// create tasks for subprojects
+subprojects { subproject ->
+  // get right configuration for the subproject
+  def config = rootProject.ext.configMap["$subproject.name"]
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task createHTML {
+
+    description = "Create webpage summarizing the visualizations."
+
+    def dataset = config.dataset
+    def counter = config.bootstrapTongue.counter
+
+    def phonemesFile = file("$rootProject.rootDir/configuration/$dataset.name/database.json")
+    def slurper = new groovy.json.JsonSlurper()
+    def phonemes = slurper.parse(phonemesFile)
+
+    phonemes.findAll{it.missing == false}.each{
+      dependsOn ":projects:bootstrapTongue:subtasks:$counter-$dataset.name-$it.speaker-$it.id:visualizeTongueProjection"
+    }
+
+    dependsOn "createTongueModel"
+
+    def outputPath =
+      file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/html")
+
+      def outputFile = file("$outputPath/index.html")
+
+        doLast {
+
+          outputFile.parentFile.mkdirs()
+
+          def files = fileTree(rootDir) {
+            include "configuration/$dataset.name/*/speaker.groovy"
+          }
+
+          def fileSet = files.files as SortedSet
+
+          outputFile.withWriter{ w ->
+
+            w << "<html>\n"
+            w << "<head>\n"
+            w << "<h1>Projections</h1>\n"
+            w << "<style> table, th, td {border: 1px solid black; border-collapse: collapse;} th, td {padding: 15px; text-align:center;} </style>"
+            w << "</head><body>"
+
+            fileSet.each{ speaker ->
+              // read meta information of speaker
+              def slurper2 = new ConfigSlurper()
+              def configuration =  slurper2.parse(speaker.text)
+
+              def name = configuration.speaker.name
+
+              w << "<h3>${configuration.speaker.name}</h3>\n"
+              w << "<table>\n"
+
+              def baseDir = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/${counter}/$name/")
+              w << "<tr style=\"text-align:center\" >\n"
+              w << "<td>scan_id</td>\n"
+              w << "<td>xy view</td>\n"
+              w << "<td>zx view</td>\n"
+              w << "<td>yz view</td>\n"
+              w << "</tr>\n"
+
+              configuration.speaker.scans.each{ scan ->
+                w << "<tr>\n"
+
+                def projections = file("$baseDir/${scan}/visualizeTongueProjection/")
+                def imageDir = file("${outputPath}/images/${name}/${scan}")
+
+                // copy slice projections
+                copy{
+                  from projections
+                  into imageDir
+                  include "*.png"
+                }
+
+                w << "<td>${scan}</td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xy_2.png\"/>\n\
+                </td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_2.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_xz_3.png\"/>\n\
+                </td>\n"
+                w << "<td>\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_0.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_1.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_2.png\"/>\n\
+                  <img style=\"height:10em\" src=\"./images/${name}/${scan}/slice_yz_3.png\"/>\n\
+                </td>\n"
+                w << "</tr>\n"
+              }
+
+              w << "</table>\n"
+            }
+
+            w << "</body></html>"
+          }
+
+        } // end doLast
+
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+  task createMissing {
+
+    description = "Reconstruct missing data."
+
+    def dataset = config.dataset
+    def counter = config.bootstrapTongue.counter
+
+    def phonemesFile = file("$rootProject.rootDir/configuration/$dataset.name/database.json")
+
+    def slurper = new groovy.json.JsonSlurper()
+    def phonemes = slurper.parse(phonemesFile)
+
+    def missing = phonemes.findAll { it.missing == true }
+
+    phonemes.findAll { it.missing == false }.each { entry ->
+      inputs.file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$entry.speaker/$entry.id/mapTongueToProcrustesPalate/mapped.ply")
+      dependsOn ":projects:bootstrapTongue:subtasks:$counter-$dataset.name-$entry.speaker-$entry.id:mapTongueToProcrustesPalate"
+    }
+
+    missing.each{ entry ->
+      outputs.file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$entry.speaker/$entry.id/mapTongueToProcrustesPalate/mapped.ply")
+    }
+
+    doLast{
+
+      missing.each{ phoneme ->
+
+        def otherSpeaker =
+          ( phonemes.findAll { it.missing == false && it.prompt == phoneme.prompt } ).collect {
+            "$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$it.speaker/$it.id/mapTongueToProcrustesPalate/mapped.ply"
+          }.join(' ')
+
+        def sameSpeaker =
+          ( phonemes.findAll { it.missing == false && it.speaker == phoneme.speaker } ).collect {
+            "$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$it.speaker/$it.id/mapTongueToProcrustesPalate/mapped.ply"
+          }.join(' ')
+
+        def otherSpeakerAverage = File.createTempFile("temp",".tmp.ply")
+        def sameSpeakerAverage = File.createTempFile("temp",".tmp.ply")
+        def output = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$phoneme.speaker/$phoneme.id/mapTongueToProcrustesPalate/mapped.ply")
+
+        def command = "mesh-average --input $otherSpeaker --output $otherSpeakerAverage"
+        logger.debug(command)
+
+        exec{
+          commandLine command.tokenize()
+          workingDir rootProject.buildDir
+        }
+
+        command =  "mesh-average --input $sameSpeaker --output $sameSpeakerAverage"
+        logger.debug(command)
+
+        exec{
+          commandLine command.tokenize()
+          workingDir rootProject.buildDir
+        }
+
+        output.parentFile.mkdirs()
+
+        command = "mesh-average --input $otherSpeakerAverage $sameSpeakerAverage --output $output"
+        logger.debug(command)
+
+        exec{
+          commandLine command.tokenize()
+          workingDir rootProject.buildDir
+        }
+
+        otherSpeakerAverage.delete()
+        sameSpeakerAverage.delete()
+
+      }
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task createTongueTrainingFile {
+
+    description = "Creates tongue training file."
+
+    def counter = config.bootstrapTongue.counter
+    def dataset = config.dataset
+
+    def databaseFile = file("$rootProject.rootDir/configuration/$dataset.name/database.json")
+    def trainingFile = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/training/tongue_training.yaml")
+
+    inputs.file databaseFile
+    outputs.file trainingFile
+
+    doLast{
+
+      trainingFile.parentFile.mkdirs()
+
+      def slurper = new groovy.json.JsonSlurper()
+
+      def database = slurper.parse(databaseFile)
+
+      def speakers = database.collect{it.speaker}.unique().sort()
+
+      def phonemes = database.collect{it.prompt}.unique()
+
+
+      def trainingList = []
+
+      speakers.each{ speakerName ->
+
+        def speakerMap = [:]
+        speakerMap["name"] = speakerName
+        def myPhonemes = database.findAll{it.speaker == speakerName}.sort{it.prompt}
+        def speakerPhonemes = []
+        myPhonemes.each{ phoneme ->
+
+          def entry = [:]
+          entry["prompt"] = phoneme.prompt
+          entry["path"] = new String("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$phoneme.speaker/$phoneme.id/mapTongueToProcrustesPalate/mapped.ply")
+
+          speakerPhonemes.add(entry)
+
+        }
+
+        speakerMap["phonemes"] = speakerPhonemes
+
+        trainingList.add(speakerMap)
+
+
+      }
+
+      def meta = [:]
+      meta["speakerAmount"] = speakers.size()
+      meta["phonemeAmount"] = phonemes.size()
+
+      def root = [:]
+      root["meta"] = meta
+      root["data"] = trainingList
+
+      def yaml = new Yaml()
+
+      trainingFile.withWriter{ writer ->
+        writer << yaml.dump(root)
+      }
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  task createTongueModel {
+
+    description = "Creates tongue model."
+
+    def counter = config.bootstrapTongue.counter
+    def dataset = config.dataset
+
+    dependsOn "createMissing"
+    dependsOn createTongueTrainingFile
+
+    def trainingFile = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/training/tongue_training.yaml")
+    def modelFile = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/model/tongue_model.yaml")
+
+    // task uses all tongue meshes
+    def phonemesFile = file("$rootProject.rootDir/configuration/$dataset.name/database.json")
+
+    def slurper = new groovy.json.JsonSlurper()
+    def phonemes = slurper.parse(phonemesFile)
+
+    phonemes.each { entry ->
+      inputs.file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$entry.speaker/$entry.id/mapTongueToProcrustesPalate/mapped.ply")
+    }
+
+    inputs.file trainingFile
+    outputs.file modelFile
+
+    doLast{
+
+      modelFile.parentFile.mkdirs()
+
+      def command = "model-builder --samples $trainingFile --output $modelFile"
+
+      exec{
+        commandLine command.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+}

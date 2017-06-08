@@ -1,0 +1,79 @@
+import FlagBuilder
+
+// create tasks for subprojects
+subprojects { subproject ->
+
+  // get right configuration for the subproject
+  def config = rootProject.ext.configMap["$subproject.name"]
+
+  task cropToVocalTract { task ->
+    description = "Crops a scan to the vocal tract area."
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def dataset = config.speaker.dataset
+    def scanPath = config.speaker.scanPath
+
+    // source and destination file
+    def srcFile = file("$mriDir/$scanPath/scan.json")
+    def destFile = file("$rootProject.buildDir/$scanPath/$task.name/vocaltract.json")
+
+    inputs.file srcFile
+    outputs.file destFile
+
+    // read necessary settings
+    def minX = config.speaker.cropToVocalTract.minX
+    def minY = config.speaker.cropToVocalTract.minY
+    def minZ = config.speaker.cropToVocalTract.minZ
+
+    def maxX = config.speaker.cropToVocalTract.maxX
+    def maxY = config.speaker.cropToVocalTract.maxY
+    def maxZ = config.speaker.cropToVocalTract.maxZ
+
+    doLast{
+      destFile.parentFile.mkdirs()
+
+      def command = "scan-crop --input $srcFile --min $minX $minY $minZ --max $maxX $maxY $maxZ --output $destFile"
+      logger.debug(command)
+      exec{
+        commandLine command.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+
+
+  task smooth {
+    description = "Smooths a cropped scan by using surface-enhacing diffusion."
+
+    def speaker = config.speaker.name
+    def scan = config.speaker.scan
+    def dataset = config.speaker.dataset
+    def scanPath = config.speaker.scanPath
+
+    def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
+    def destFile = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+
+    dependsOn "cropToVocalTract"
+
+    inputs.file srcFile
+    outputs.file destFile
+
+    doLast{
+      destFile.parentFile.mkdirs()
+
+      def flags = (new FlagBuilder()).build(config.speaker.smooth)
+      flags.add("--input $srcFile")
+      flags.add("--output $destFile")
+
+      def command = "diffusion3D ${flags.join(' ')}"
+
+      logger.debug(command)
+      exec{
+        commandLine command.tokenize()
+        workingDir rootProject.buildDir
+      }
+    }
+  }
+
+} // end subprojects
