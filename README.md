@@ -316,4 +316,4 @@ where *${COUNT}* is the number of the iteration.
 In both cases, you can start a HTML server in the corresponding subfolder and then inspect the results in your browser.
 
 [1]: http://arxiv.org/abs/1612.05005
-[2]: https://www.bitbucket.org/ahewer/msp-mri-shape-tools
+[2]: https://github.com/m2ci-msp/mri-shape-tools
