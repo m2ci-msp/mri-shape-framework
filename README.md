@@ -19,7 +19,7 @@ Please make sure that the following tools are installed and are also available o
 ## Setup
 
 The following sections explain how to add an MRI dataset to the framework and how it is configured.
-In the following, *${...}* are always placeholder variables.
+In the following, `${...}` are always placeholder variables.
 
 ### Adding a Dataset
 
@@ -36,7 +36,7 @@ The scan files have to placed in the *resources/mri* folder where the following 
                     └── scan.json
 ```
 
-where *${DATASET_NAME}*, *${SPEAKER_NAME}*, and *${SCAN_NAME}* can be freely chosen.
+where `${DATASET_NAME}`, `${SPEAKER_NAME}`, and `${SCAN_NAME}` can be freely chosen.
 The file *scan.json* is the actual MRI scan in [JSON format][3].
 
 ### Configuring the Dataset
@@ -50,7 +50,7 @@ These are placed in the *configuration* folder:
     └── ${DATASET_NAME}
 ```
 
-where *${DATASET_NAME}* is the same name chosen above.
+where `${DATASET_NAME}` is the same name chosen above.
 
 First, we create the file *database.json* that contains meta information about the added dataset.
 This file contains a JSON list of JSON objects.
@@ -66,9 +66,9 @@ Each object has the following structure:
 ```
 
 Here, *prompt* is a label that identifies the sound that was produced during the scan.
-The variables *${SCAN_NAME}* and *${SPEAKER_NAME}* are chosen like above.
+The variables `${SCAN_NAME}` and `${SPEAKER_NAME}` are chosen like above.
 The flag *missing* indicates if the scan for the respective speaker and prompt is missing in the dataset.
-In this case, *${SCAN_NAME}* should be set to something that also indicates that the scan is missing.
+In this case, `${SCAN_NAME}` should be set to something that also indicates that the scan is missing.
 
 Furthermore, we create the file *palateDatabase.json* that contains information about scans that are used for deriving the hard palate shape of each speaker in the dataset.
 Again, we have a list of JSON objects:
@@ -311,7 +311,7 @@ The visualizations of the bootstrap results are present in
             └── ${COUNT}
                 └── html
 ```
-where *${COUNT}* is the number of the iteration.
+where `${COUNT}` is the number of the iteration.
 
 In both cases, you can start a HTML server in the corresponding subfolder and then inspect the results in your browser.
 
