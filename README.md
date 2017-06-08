@@ -315,5 +315,22 @@ where `${COUNT}` is the number of the iteration.
 
 In both cases, you can start a HTML server in the corresponding subfolder and then inspect the results in your browser.
 
+## License
+
+This work is licensed under the [MIT license](./LICENSE.md).
+
+If you are using our framework, please cite, for the time being, the following paper:
+
+```bibtex
+@article{HewerWSR16,
+    author    = {Hewer, Alexander and Wuhrer, Stefanie and Steiner, Ingmar and Richmond, Korin},
+    title     = {A Multilinear Tongue Model Derived from Speech Related {MRI} Data of the Human Vocal Tract},
+    journal   = {CoRR},
+    volume    = {abs/1612.05005},
+    year      = {2016},
+    url       = {http://arxiv.org/abs/1612.05005}
+}
+```
+
 [1]: http://arxiv.org/abs/1612.05005
 [2]: https://github.com/m2ci-msp/mri-shape-tools
