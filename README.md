@@ -221,6 +221,10 @@ Open the *blend files* in [resources/template](resources/template) with Blender 
 Basically, you can also add your own landmarks by modifying the blend files.
 We recommend using the *landmark-tool* of the [MSP MRI Shape Tools][2] to distribute the landmarks on the MRI scans.
 
+## Example Data
+
+Please have a look at the [example data repository](https://github.com/m2ci-msp/mri-shape-framework-example-data) for sample MRI data and corresponding configuration and landmark files.
+
 ## Running the Framework
 
 After the configuration is finished, you can run the following commands from the root directory.
