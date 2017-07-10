@@ -338,3 +338,4 @@ If you are using our framework, please cite, for the time being, the following p
 
 [1]: http://arxiv.org/abs/1612.05005
 [2]: https://github.com/m2ci-msp/mri-shape-tools
+[3]: https://github.com/m2ci-msp/mri-shape-tools/blob/master/dataFormats/scan.md
