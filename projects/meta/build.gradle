@@ -350,9 +350,15 @@ subprojects { subproject ->
         def inputFile = file("$rootProject.buildDir/$dataset.name/evaluation/generalization_${type}.json")
         def outputFile = file("$rootProject.buildDir/$dataset.name/evaluation/generalization_${type}.pdf")
 
-        exec{
-          commandLine "Rscript ribbonPlotter.R $inputFile $outputFile".tokenize()
-          workingDir file("$rootProject.ext.Rscripts")
+        // only plot results if input file exists, measure-generalization omits the evaluation of one
+        // mode in case of a PCA model
+        if( inputFile.exists() ) {
+
+          exec{
+            commandLine "Rscript ribbonPlotter.R $inputFile $outputFile".tokenize()
+            workingDir file("$rootProject.ext.Rscripts")
+          }
+
         }
 
       }
