@@ -560,7 +560,7 @@ subprojects { subproject ->
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  task evaluateModel{
+  task evaluateTongueModel{
 
     dependsOn evaluateSpecificity
     dependsOn evaluateGeneralization
