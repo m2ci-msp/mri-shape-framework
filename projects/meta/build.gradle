@@ -276,8 +276,6 @@ subprojects { subproject ->
         workingDir rootProject.ext.evaluationResourceDir
       }
 
-      subsets.add("all")
-
       subsets.each{ subset ->
 
         ["speaker", "phoneme"].each{ type ->
