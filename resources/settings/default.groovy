@@ -24,6 +24,7 @@ speaker {
     ignoreUpper = 0
     thresholdingType = "ADAPTIVE"
     threshold = 60
+    cascadeAmount = 3
   }
 
   purgeCloud{

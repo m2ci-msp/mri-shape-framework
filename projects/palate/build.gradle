@@ -2,254 +2,263 @@ import FlagBuilder
 
 // create tasks for subprojects
 subprojects { subproject ->
-  // get right configuration for the subproject
-  def config = rootProject.ext.configMap["$subproject.name"]
+    // get right configuration for the subproject
+    def config = rootProject.ext.configMap["$subproject.name"]
 
-  task alignPalateTemplate {
-    description = "Rigidly aligns the palate template using landmark information."
+    task alignPalateTemplate {
+        description = "Rigidly aligns the palate template using landmark information."
 
-    def speaker = config.speaker.name
-    def scan = config.speaker.scan
-    def dataset = config.speaker.dataset
+        def speaker = config.speaker.name
+        def scan = config.speaker.scan
+        def dataset = config.speaker.dataset
 
-    // source and destination file
-    def scanPath = config.speaker.scanPath
+        // source and destination file
+        def scanPath = config.speaker.scanPath
 
-    // landmarks
-    def landmarkFile = new File(rootProject.buildDir, "$scanPath/landmarksPalate/landmarks.json")
-    def alignedTemplate = new File(rootProject.buildDir, "$scanPath/alignPalateTemplate/alignedTemplate.ply")
+        // landmarks
+        def landmarkFile = new File(rootProject.buildDir, "$scanPath/landmarksPalate/landmarks.json")
+        def alignedTemplate = new File(rootProject.buildDir, "$scanPath/alignPalateTemplate/alignedTemplate.ply")
 
-    // template file
-    def templateFile  = new File(templateDir, "${palateTemplateName}.ply")
+        // template file
+        def templateFile  = new File(templateDir, "${palateTemplateName}.ply")
 
-    // align depends on the landmarksPalate task
-    dependsOn "landmarksPalate"
+        // align depends on the landmarksPalate task
+        dependsOn "landmarksPalate"
 
-    inputs.file landmarkFile
-    outputs.file alignedTemplate
+        inputs.file landmarkFile
+        outputs.file alignedTemplate
 
-    // read necessary settings
+        // read necessary settings
 
 
-    doLast{
-      alignedTemplate.getParentFile().mkdirs()
+        doLast{
+            alignedTemplate.getParentFile().mkdirs()
 
-      logger.debug("landmark-alignment --noRotation --noScaling --source $templateFile --landmarks $landmarkFile --output $alignedTemplate")
+            logger.debug("landmark-alignment --noRotation --noScaling --source $templateFile --landmarks $landmarkFile --output $alignedTemplate")
 
-      exec{
-        commandLine "landmark-alignment --noRotation --noScaling --source $templateFile --landmarks $landmarkFile --output $alignedTemplate".tokenize()
-        workingDir rootProject.buildDir
-      }
-    }
-  }
-
-  ///////////////////////////////////////////////////////////////////////////
-
-  task landmarksPalate {
-
-    description = "Computes palate landmarks files usable by the template matching."
-
-    def speaker = config.speaker.name
-    def scan = config.speaker.scan
-    def dataset = config.speaker.dataset
-    def scanPath = config.speaker.scanPath
-
-    // source and destination directories
-    def srcFile = file("$landmarksPalateDir/$scanPath/landmarks.json")
-    def destFile = file("$rootProject.buildDir/$scanPath/landmarksPalate/landmarks.json")
-    def templateLandmarksFile = file("$rootProject.buildDir/landmarksPalate.json")
-    def scanFile = file("$mriDir/$scanPath/scan.json")
-
-    // landmarksPalate depends on the createPalateTemplateLandmarks task
-    dependsOn rootProject.createPalateTemplateLandmarks
-
-    inputs.files srcFile, templateLandmarksFile, scanFile
-    outputs.dir destFile
-
-    doLast{
-
-      destFile.parentFile.mkdirs()
-      def slurper = new groovy.json.JsonSlurper()
-
-      // open spacings of scan
-      def spacings = slurper.parse(scanFile).spacings
-
-      // open template landmarks
-      def templateLandmarks = slurper.parse(templateLandmarksFile)
-
-      // open user landmarks
-      def userLandmarks = slurper.parse(srcFile)
-
-      // construct landmark correspondences list
-      def landmarks = []
-
-      templateLandmarks.each{ mark ->
-        def found = userLandmarks.find{
-          it.name == mark.name
+            exec{
+                commandLine "landmark-alignment --noRotation --noScaling --source $templateFile --landmarks $landmarkFile --output $alignedTemplate".tokenize()
+                workingDir rootProject.buildDir
+            }
         }
-        if ( found != null) {
-          // fuse landmark information
-          landmarks << [
-            name: found.name,
-            sourceIndex: mark.index,
-            sourceX : mark.X,
-            sourceY : mark.Y,
-            sourceZ : mark.Z,
-            // scale target positions according to the spacings
-            targetX: found.x.toDouble() * spacings.x.toDouble(),
-            targetY: found.y.toDouble() * spacings.y.toDouble(),
-            targetZ: found.z.toDouble() * spacings.z.toDouble(),
-          ]
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+
+    task landmarksPalate {
+
+        description = "Computes palate landmarks files usable by the template matching."
+
+        def speaker = config.speaker.name
+        def scan = config.speaker.scan
+        def dataset = config.speaker.dataset
+        def scanPath = config.speaker.scanPath
+
+        // source and destination directories
+        def srcFile = file("$landmarksPalateDir/$scanPath/landmarks.json")
+        def destFile = file("$rootProject.buildDir/$scanPath/landmarksPalate/landmarks.json")
+        def templateLandmarksFile = file("$rootProject.buildDir/landmarksPalate.json")
+        def scanFile = file("$mriDir/$scanPath/scan.json")
+
+        // landmarksPalate depends on the createPalateTemplateLandmarks task
+        dependsOn rootProject.createPalateTemplateLandmarks
+
+        inputs.files srcFile, templateLandmarksFile, scanFile
+        outputs.dir destFile
+
+        doLast{
+
+            destFile.parentFile.mkdirs()
+            def slurper = new groovy.json.JsonSlurper()
+
+            // open spacings of scan
+            def spacings = slurper.parse(scanFile).spacings
+
+            // open template landmarks
+            def templateLandmarks = slurper.parse(templateLandmarksFile)
+
+            // open user landmarks
+            def userLandmarks = slurper.parse(srcFile)
+
+            // construct landmark correspondences list
+            def landmarks = []
+
+            templateLandmarks.each{ mark ->
+                def found = userLandmarks.find{
+                    it.name == mark.name
+                }
+                if ( found != null) {
+                    // fuse landmark information
+                    landmarks << [
+                        name: found.name,
+                        sourceIndex: mark.index,
+                        sourceX : mark.X,
+                        sourceY : mark.Y,
+                        sourceZ : mark.Z,
+                        // scale target positions according to the spacings
+                        targetX: found.x.toDouble() * spacings.x.toDouble(),
+                        targetY: found.y.toDouble() * spacings.y.toDouble(),
+                        targetZ: found.z.toDouble() * spacings.z.toDouble(),
+                    ]
+                }
+            }
+
+            // build json file
+            def json = new groovy.json.JsonBuilder(landmarks)
+
+            destFile.withWriter{
+                it << json.toPrettyString()
+            }
+
         }
-      }
-
-      // build json file
-      def json = new groovy.json.JsonBuilder(landmarks)
-
-      destFile.withWriter{
-        it << json.toPrettyString()
-      }
-
     }
-  }
 
-  ///////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
 
-  task matchPalate {
-    description = "Performs template matching for extracting the palate shape."
+    task matchPalate {
+        description = "Performs template matching for extracting the palate shape."
 
-    def speaker = config.speaker.name
-    def scan = config.speaker.scan
-    def dataset = config.speaker.dataset
-    def scanPath = config.speaker.scanPath
+        def speaker = config.speaker.name
+        def scan = config.speaker.scan
+        def dataset = config.speaker.dataset
+        def scanPath = config.speaker.scanPath
 
-    def pointCloud = file("$rootProject.buildDir/$scanPath/segmentPalate/point_cloud.obj")
-    // landmarks, file does not need to exist
-    def landmarkFile = file("$rootProject.buildDir/$scanPath/landmarksPalate/landmarks.json")
-    def destDir = file("$rootProject.buildDir/$scanPath/matchPalate")
+        def pointCloud = file("$rootProject.buildDir/$scanPath/segmentPalate/point_cloud.obj")
+        // landmarks, file does not need to exist
+        def landmarkFile = file("$rootProject.buildDir/$scanPath/landmarksPalate/landmarks.json")
+        def destDir = file("$rootProject.buildDir/$scanPath/matchPalate")
 
-    // template file
-    def templateFile = file("$rootProject.buildDir/$scanPath/alignPalateTemplate/alignedTemplate.ply")
+        // template file
+        def templateFile = file("$rootProject.buildDir/$scanPath/alignPalateTemplate/alignedTemplate.ply")
 
-    // matchPalate depends on the segmentPalate, landmarksPalate, and alignPalateTemplate task
+        // matchPalate depends on the segmentPalate, landmarksPalate, and alignPalateTemplate task
 
-    dependsOn "segmentPalate"
-    dependsOn "landmarksPalate"
-    dependsOn "alignPalateTemplate"
+        dependsOn "segmentPalate"
+        dependsOn "landmarksPalate"
+        dependsOn "alignPalateTemplate"
 
-    inputs.file pointCloud
-    outputs.dir destDir
+        inputs.file pointCloud
+        outputs.dir destDir
 
-    doLast{
-      destDir.mkdirs()
+        doLast{
+            destDir.mkdirs()
 
-      // assemble necessary settings
-      def flags = (new FlagBuilder()).build(config.speaker.matchPalate)
+            // assemble necessary settings
+            def flags = (new FlagBuilder()).build(config.speaker.matchPalate)
 
-      flags.add("--source $templateFile")
-      flags.add("--target $pointCloud")
-      flags.add("--output tracking_org_result0.ply")
+            flags.add("--source $templateFile")
+            flags.add("--target $pointCloud")
+            flags.add("--output tracking_org_result0.ply")
 
-      if( landmarkFile.exists() ) {
-        flags.add("--landmarks $landmarkFile")
-      }
+            if( landmarkFile.exists() ) {
+                flags.add("--landmarks $landmarkFile")
+            }
 
-      logger.debug("match-template ${flags.join(' ')}")
+            logger.debug("match-template ${flags.join(' ')}")
 
-      exec{
-        commandLine "match-template ${flags.join(' ')}".tokenize()
-        workingDir destDir
-      }
+            exec{
+                commandLine "match-template ${flags.join(' ')}".tokenize()
+                workingDir destDir
+            }
+        }
     }
-  }
 
-  ///////////////////////////////////////////////////////////////////////////
-
-
-  task projectMatchedPalate { task ->
-    description = "Projects matched palate to scan."
-
-    def speaker = config.speaker.name
-    def scan = config.speaker.scan
-    def dataset = config.speaker.dataset
-    def scanPath = config.speaker.scanPath
-
-    // input
-    def aligned = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
-    def palateScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
-
-    // output
-    def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
-
-    def projected = file("$destDir/projected.json")
+    ///////////////////////////////////////////////////////////////////////////
 
 
-    // projectPalate depends on the matchPalate task
-    dependsOn "matchPalate"
+    task projectMatchedPalate { task ->
+        description = "Projects matched palate to scan."
 
-    inputs.files aligned, palateScan
-    outputs.dir destDir
+        def speaker = config.speaker.name
+        def scan = config.speaker.scan
+        def dataset = config.speaker.dataset
+        def scanPath = config.speaker.scanPath
 
-    doLast{
-     destDir.mkdirs()
+        // input
+        def aligned = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
+        def palateScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
 
-      def command = "mesh-project --mesh $aligned --scan $palateScan --output $projected"
-      logger.debug(command)
-      exec{
-        commandLine command.tokenize()
-        workingDir rootProject.buildDir
-      }
+        // output
+        def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
+
+        def projected = file("$destDir/projected.json")
+
+
+        // projectPalate depends on the matchPalate task
+        dependsOn "matchPalate"
+
+        inputs.files aligned, palateScan
+        outputs.dir destDir
+
+        doLast{
+            destDir.mkdirs()
+
+            def command = "mesh-project --mesh $aligned --scan $palateScan --output $projected"
+            logger.debug(command)
+            exec{
+                commandLine command.tokenize()
+                workingDir rootProject.buildDir
+            }
+        }
     }
-  }
 
-  ///////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
 
-  task segmentPalate { task ->
-    description = "Segments a smoothed scan by using thresholding. The normals in the point cloud are inverted."
+    task segmentPalate { task ->
+        description = "Segments a smoothed scan by using thresholding. The normals in the point cloud are inverted."
 
-    def speaker = config.speaker.name
-    def scan = config.speaker.scan
-    def dataset = config.speaker.dataset
-    def scanPath = config.speaker.scanPath
+        def speaker = config.speaker.name
+        def scan = config.speaker.scan
+        def dataset = config.speaker.dataset
+        def scanPath = config.speaker.scanPath
 
-    def srcFile = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
-    def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
-    def segmentation = file("$destDir/segmentation.json")
-    def cloudFile = file("$destDir/point_cloud.obj")
+        def srcFile = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+        def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
+        def segmentation = file("$destDir/segmentation.json")
+        def cloudFile = file("$destDir/point_cloud.obj")
 
-    // segment depends on the smooth task
-    def smooth = ":projects:shared:$dataset.name-$speaker-$scan:smooth"
+        // segment depends on the smooth task
+        def smooth = ":projects:shared:$dataset.name-$speaker-$scan:smooth"
 
-    dependsOn smooth
+        dependsOn smooth
 
-    inputs.file srcFile
-    outputs.dir destDir
+        inputs.file srcFile
+        outputs.dir destDir
 
-    doLast{
-      destDir.mkdirs()
+        doLast{
+            destDir.mkdirs()
 
-      // read necessary settings
-      def thresholdingType = config.speaker.segmentPalate.thresholdingType
+            // read necessary settings
+            def thresholdingType = config.speaker.segmentPalate.thresholdingType
 
-      def command = ""
+            def command = ""
 
-      if( thresholdingType == "BASIC" ) {
+            if( thresholdingType == "BASIC" ) {
 
-        def threshold = config.speaker.segmentPalate.threshold
-        command = "threshold --source $srcFile --threshold $threshold --output $segmentation --cloud $cloudFile --flip"
-      }
-      else if( thresholdingType == "ADAPTIVE" ) {
-        command = "adaptive-threshold --source $srcFile --output $segmentation --cloud $cloudFile --flip"
-      }
+                def threshold = config.speaker.segmentPalate.threshold
+                command = "threshold --source $srcFile --threshold $threshold --output $segmentation --cloud $cloudFile --flip"
 
-      logger.debug(command)
-      logging.captureStandardOutput LogLevel.DEBUG
+            }
+            else if( thresholdingType == "ADAPTIVE" ) {
 
-      exec{
-        commandLine command.tokenize()
-        workingDir rootProject.buildDir
-      }
+                command = "adaptive-threshold --source $srcFile --output $segmentation --cloud $cloudFile --flip"
+
+            }
+            else if( thresholdingType == "CASCADED_OTSU") {
+
+                def cascadeAmount = config.speaker.segmentPalate.cascadeAmount
+                command = "cascaded-ostu --cascadeAmount $cascadeAmount --source $srcFile --output $segmentation --cloud $cloudFile --flip"
+
+            }
+
+            logger.debug(command)
+            logging.captureStandardOutput LogLevel.DEBUG
+
+            exec{
+                commandLine command.tokenize()
+                workingDir rootProject.buildDir
+            }
+        }
     }
-  }
 
 }
