@@ -247,7 +247,7 @@ subprojects { subproject ->
             else if( thresholdingType == "CASCADED_OTSU") {
 
                 def cascadeAmount = config.speaker.segmentPalate.cascadeAmount
-                command = "cascaded-ostu --cascadeAmount $cascadeAmount --source $srcFile --output $segmentation --cloud $cloudFile --flip"
+                command = "cascaded-otsu --cascadeAmount $cascadeAmount --source $srcFile --output $segmentation --cloud $cloudFile --flip"
 
             }
 
