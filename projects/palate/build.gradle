@@ -176,7 +176,7 @@ subprojects { subproject ->
 
         // input
         def aligned = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
-        def palateScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/scan.json")
+        def palateScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
 
         // output
         def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
@@ -205,20 +205,20 @@ subprojects { subproject ->
     ///////////////////////////////////////////////////////////////////////////
 
     task segmentPalate { task ->
-        description = "Segments a smoothed scan by using thresholding. The normals in the point cloud are inverted."
+        description = "Segments a scan by using thresholding. The normals in the point cloud are inverted."
 
         def speaker = config.speaker.name
         def scan = config.speaker.scan
         def dataset = config.speaker.dataset
         def scanPath = config.speaker.scanPath
 
-        def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/scan.json")
+        def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
         def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
         def segmentation = file("$destDir/segmentation.json")
         def cloudFile = file("$destDir/point_cloud.obj")
 
         // segment depends on the cropToVocalTract task
-        def smooth = ":projects:shared:$dataset.name-$speaker-$scan:cropToVocalTract"
+        def cropToVocalTract = ":projects:shared:$dataset.name-$speaker-$scan:cropToVocalTract"
 
         dependsOn cropToVocalTract
 
@@ -236,7 +236,7 @@ subprojects { subproject ->
             if( thresholdingType == "BASIC" ) {
 
                 def threshold = config.speaker.segmentPalate.threshold
-                command = "threshold --source $srcFile --threshold $threshold --output $segmentation --cloud $cloudFile --flip"
+                command = "threshold --input $srcFile --threshold $threshold --output $segmentation --scale_to_8bit --cloud $cloudFile --flip"
 
             }
             else if( thresholdingType == "ADAPTIVE" ) {

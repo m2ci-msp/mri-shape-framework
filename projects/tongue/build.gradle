@@ -13,6 +13,8 @@ subprojects { subproject ->
     def speaker = config.speaker.name
     def scan = config.speaker.scan
 
+    def palateId = config.speaker.palateScan
+
     def scanPath = config.speaker.scanPath
     def basePath = config.speaker.basePath
     def dataset = config.speaker.dataset
@@ -21,7 +23,7 @@ subprojects { subproject ->
     def palate = new File(rootProject.buildDir, "$basePath/palate/tracking_org_result0.ply")
     def palateScan = new File(rootProject.buildDir, "$basePath/palate/scan.json")
     def currentScan = new File(rootProject.buildDir, "$scanPath/smooth/scan.json")
-    def landmarksAlignmentFile = file("$landmarksAlignment/$scanPath/landmarks.json")
+    def landmarksAlignmentFile = file("$landmarksAlignmentDir/$basePath/$palateId/landmarks.json")
 
     def destDir = new File(rootProject.buildDir, "$scanPath/$task.name")
 
@@ -35,7 +37,7 @@ subprojects { subproject ->
     dependsOn initPalate
     dependsOn cropToVocalTract
 
-    inputs.files palate, palateScan, currentScan, boundingBoxFile
+    inputs.files palate, palateScan, currentScan, landmarksAlignmentFile
     outputs.files motion, alignedMesh
 
     doLast{
@@ -455,7 +457,7 @@ subprojects { subproject ->
 
     // input
     def matched = file("$rootProject.buildDir/$scanPath/matchTongue/tracking_org_result0.ply")
-    def tongueScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/scan.json")
+    def tongueScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
 
     // output
     def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
@@ -556,7 +558,7 @@ subprojects { subproject ->
     def dataset = config.speaker.dataset
     def scanPath = config.speaker.scanPath
 
-    def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/scan.json")
+    def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
     def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
     def segmentation = file("$destDir/segmentation.json")
     def cloudFile = file("$destDir/point_cloud.obj")
@@ -681,7 +683,7 @@ subprojects { subproject ->
 
     // input
     def aligned = file("$rootProject.buildDir/$scanPath/reconstructPalate/aligned.ply")
-    def palateScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/scan.json")
+    def palateScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
 
     // output
     def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
