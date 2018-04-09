@@ -70,15 +70,12 @@ speaker {
   }
 
   alignPalate{
-    translationStep = 1
-    rotationStep = 1
-    translationLimit = 20
-    rotationLimit = 20
-    iter = 10
 
-    // these quantities are in mm, so watch out for the MRI scan spacings!
-    profileOffset = 1
-    profileLength = 15
+    iterationAmount = 20
+    convergenceFactor = 10000000
+    projectedGradientTolerance = 0.00001
+    maxFunctionEvals = 1000
+
   }
 
   measureDistance{

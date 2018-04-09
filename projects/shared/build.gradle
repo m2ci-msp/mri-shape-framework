@@ -7,7 +7,7 @@ subprojects { subproject ->
   def config = rootProject.ext.configMap["$subproject.name"]
 
   task cropToVocalTract { task ->
-    description = "Crops a scan to the vocal tract area."
+    description = "Crops a smoothed scan to the vocal tract area."
 
     def speaker = config.speaker.name
     def scan = config.speaker.scan
@@ -15,11 +15,13 @@ subprojects { subproject ->
     def scanPath = config.speaker.scanPath
 
     // source and destination file
-    def srcFile = file("$mriDir/$scanPath/scan.json")
+    def srcFile = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
     def destFile = file("$rootProject.buildDir/$scanPath/$task.name/vocaltract.json")
 
     inputs.file srcFile
     outputs.file destFile
+
+    dependsOn "smooth"
 
     // read necessary settings
     def minX = config.speaker.cropToVocalTract.minX
@@ -44,17 +46,15 @@ subprojects { subproject ->
 
 
   task smooth {
-    description = "Smooths a cropped scan by using surface-enhacing diffusion."
+    description = "Smooths a scan by using surface-enhacing diffusion."
 
     def speaker = config.speaker.name
     def scan = config.speaker.scan
     def dataset = config.speaker.dataset
     def scanPath = config.speaker.scanPath
 
-    def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
+    def srcFile = file("$mriDir/$scanPath/scan.json")
     def destFile = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
-
-    dependsOn "cropToVocalTract"
 
     inputs.file srcFile
     outputs.file destFile

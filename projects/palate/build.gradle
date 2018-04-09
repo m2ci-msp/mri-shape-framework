@@ -176,7 +176,7 @@ subprojects { subproject ->
 
         // input
         def aligned = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
-        def palateScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+        def palateScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/scan.json")
 
         // output
         def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
@@ -212,15 +212,15 @@ subprojects { subproject ->
         def dataset = config.speaker.dataset
         def scanPath = config.speaker.scanPath
 
-        def srcFile = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+        def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/scan.json")
         def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
         def segmentation = file("$destDir/segmentation.json")
         def cloudFile = file("$destDir/point_cloud.obj")
 
-        // segment depends on the smooth task
-        def smooth = ":projects:shared:$dataset.name-$speaker-$scan:smooth"
+        // segment depends on the cropToVocalTract task
+        def smooth = ":projects:shared:$dataset.name-$speaker-$scan:cropToVocalTract"
 
-        dependsOn smooth
+        dependsOn cropToVocalTract
 
         inputs.file srcFile
         outputs.dir destDir
