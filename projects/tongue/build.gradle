@@ -584,7 +584,7 @@ subprojects { subproject ->
       if( thresholdingType == "BASIC" ) {
 
         def threshold = config.speaker.segmentTongue.threshold
-        command = "threshold --source $srcFile --threshold $threshold --output $segmentation --cloud $cloudFile"
+        command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile"
       }
       else if( thresholdingType == "ADAPTIVE" ) {
         command = "adaptive-threshold --source $srcFile --output $segmentation --cloud $cloudFile"
