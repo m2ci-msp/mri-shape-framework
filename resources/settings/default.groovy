@@ -9,22 +9,13 @@ speaker {
     // explicit steps to take
     iter = 5
   }
-  segment {
-    // threshold paramter
-    threshold = 32
-  }
 
   segmentTongue{
-    ignoreUpper = 0
-    thresholdingType = "ADAPTIVE"
-    threshold = 60
+    thresholdingType = "OTSU"
   }
 
   segmentPalate{
-    ignoreUpper = 0
-    thresholdingType = "ADAPTIVE"
-    threshold = 60
-    cascadeAmount = 3
+    thresholdingType = "OTSU"
   }
 
   purgeCloud{
@@ -76,10 +67,6 @@ speaker {
     projectedGradientTolerance = 0.00001
     maxFunctionEvals = 1000
 
-  }
-
-  measureDistance{
-    threshold = 4
   }
 
   fitModel{
