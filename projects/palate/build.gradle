@@ -233,21 +233,23 @@ subprojects { subproject ->
 
             def command = ""
 
-            if( thresholdingType == "BASIC" ) {
+            switch(thresholdingType) {
 
-                def threshold = config.speaker.segmentPalate.threshold
-                command = "threshold --input $srcFile --threshold $threshold --output $segmentation --scale_to_8bit --cloud $cloudFile --flip"
+                case "BASIC":
 
-            }
-            else if( thresholdingType == "ADAPTIVE" ) {
+                    def threshold = config.speaker.segmentPalate.threshold
+                    command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile --flip"
+                    break
 
-                command = "adaptive-threshold --source $srcFile --output $segmentation --cloud $cloudFile --flip"
+                case "OTSU":
 
-            }
-            else if( thresholdingType == "CASCADED_OTSU") {
+                    command = "otsu-threshold --input $srcFile --output $segmentation --cloud $cloudFile --flip"
+                    break
 
-                def cascadeAmount = config.speaker.segmentPalate.cascadeAmount
-                command = "cascaded-otsu --cascadeAmount $cascadeAmount --source $srcFile --output $segmentation --cloud $cloudFile --flip"
+                default:
+
+                    throw new Exception("Unknown thresholding type.")
+                    break
 
             }
 

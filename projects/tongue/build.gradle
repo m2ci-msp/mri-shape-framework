@@ -581,13 +581,24 @@ subprojects { subproject ->
 
       def command = ""
 
-      if( thresholdingType == "BASIC" ) {
+      switch(thresholdingType) {
 
-        def threshold = config.speaker.segmentTongue.threshold
-        command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile"
-      }
-      else if( thresholdingType == "ADAPTIVE" ) {
-        command = "adaptive-threshold --source $srcFile --output $segmentation --cloud $cloudFile"
+        case "BASIC":
+
+          def threshold = config.speaker.segmentTongue.threshold
+              command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile"
+          break
+
+        case "OTSU":
+
+          command = "otsu-threshold --input $srcFile --output $segmentation --cloud $cloudFile"
+          break
+
+        default:
+
+          throw new Exception("Unknown thresholding type.")
+          break
+
       }
 
       logger.debug(command)
