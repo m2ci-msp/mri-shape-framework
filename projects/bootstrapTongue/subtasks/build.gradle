@@ -231,7 +231,7 @@ subprojects { subproject ->
     // input
     def matched = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/matchTongue/tracking_org_result0.ply")
 
-    def tongueScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+    def tongueScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
 
     // output
     def destDir = file("$rootProject.buildDir/$dataset.name/bootstrapTongue/$counter/$speaker/$scan/projectTongue")

@@ -9,22 +9,13 @@ speaker {
     // explicit steps to take
     iter = 5
   }
-  segment {
-    // threshold paramter
-    threshold = 32
-  }
 
   segmentTongue{
-    ignoreUpper = 0
-    thresholdingType = "ADAPTIVE"
-    threshold = 60
+    thresholdingType = "OTSU"
   }
 
   segmentPalate{
-    ignoreUpper = 0
-    thresholdingType = "ADAPTIVE"
-    threshold = 60
-    cascadeAmount = 3
+    thresholdingType = "OTSU"
   }
 
   purgeCloud{
@@ -70,19 +61,12 @@ speaker {
   }
 
   alignPalate{
-    translationStep = 1
-    rotationStep = 1
-    translationLimit = 20
-    rotationLimit = 20
-    iter = 10
 
-    // these quantities are in mm, so watch out for the MRI scan spacings!
-    profileOffset = 1
-    profileLength = 15
-  }
+    iterationAmount = 20
+    convergenceFactor = 10000000
+    projectedGradientTolerance = 0.00001
+    maxFunctionEvals = 1000
 
-  measureDistance{
-    threshold = 4
   }
 
   fitModel{

@@ -176,7 +176,7 @@ subprojects { subproject ->
 
         // input
         def aligned = file("$rootProject.buildDir/$scanPath/matchPalate/tracking_org_result0.ply")
-        def palateScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+        def palateScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
 
         // output
         def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
@@ -205,22 +205,22 @@ subprojects { subproject ->
     ///////////////////////////////////////////////////////////////////////////
 
     task segmentPalate { task ->
-        description = "Segments a smoothed scan by using thresholding. The normals in the point cloud are inverted."
+        description = "Segments a scan by using thresholding. The normals in the point cloud are inverted."
 
         def speaker = config.speaker.name
         def scan = config.speaker.scan
         def dataset = config.speaker.dataset
         def scanPath = config.speaker.scanPath
 
-        def srcFile = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+        def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
         def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
         def segmentation = file("$destDir/segmentation.json")
         def cloudFile = file("$destDir/point_cloud.obj")
 
-        // segment depends on the smooth task
-        def smooth = ":projects:shared:$dataset.name-$speaker-$scan:smooth"
+        // segment depends on the cropToVocalTract task
+        def cropToVocalTract = ":projects:shared:$dataset.name-$speaker-$scan:cropToVocalTract"
 
-        dependsOn smooth
+        dependsOn cropToVocalTract
 
         inputs.file srcFile
         outputs.dir destDir
@@ -233,21 +233,23 @@ subprojects { subproject ->
 
             def command = ""
 
-            if( thresholdingType == "BASIC" ) {
+            switch(thresholdingType) {
 
-                def threshold = config.speaker.segmentPalate.threshold
-                command = "threshold --source $srcFile --threshold $threshold --output $segmentation --cloud $cloudFile --flip"
+                case "BASIC":
 
-            }
-            else if( thresholdingType == "ADAPTIVE" ) {
+                    def threshold = config.speaker.segmentPalate.threshold
+                    command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile --flip"
+                    break
 
-                command = "adaptive-threshold --source $srcFile --output $segmentation --cloud $cloudFile --flip"
+                case "OTSU":
 
-            }
-            else if( thresholdingType == "CASCADED_OTSU") {
+                    command = "otsu-threshold --input $srcFile --output $segmentation --cloud $cloudFile --flip"
+                    break
 
-                def cascadeAmount = config.speaker.segmentPalate.cascadeAmount
-                command = "cascaded-otsu --cascadeAmount $cascadeAmount --source $srcFile --output $segmentation --cloud $cloudFile --flip"
+                default:
+
+                    throw new Exception("Unknown thresholding type.")
+                    break
 
             }
 

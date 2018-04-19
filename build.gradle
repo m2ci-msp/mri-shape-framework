@@ -13,6 +13,8 @@ ext {
   templateDir = file("$rootDir/resources/template")
   landmarksTongueDir = file("$rootDir/resources/landmarksTongue")
   landmarksPalateDir = file("$rootDir/resources/landmarksPalate")
+  landmarksAlignmentDir = file("$rootDir/resources/landmarksAlignment")
+
   Rscripts = file("$rootDir/resources/Rscripts")
 
   // gather configuration

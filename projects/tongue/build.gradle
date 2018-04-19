@@ -13,6 +13,8 @@ subprojects { subproject ->
     def speaker = config.speaker.name
     def scan = config.speaker.scan
 
+    def palateId = config.speaker.palateScan
+
     def scanPath = config.speaker.scanPath
     def basePath = config.speaker.basePath
     def dataset = config.speaker.dataset
@@ -21,37 +23,46 @@ subprojects { subproject ->
     def palate = new File(rootProject.buildDir, "$basePath/palate/tracking_org_result0.ply")
     def palateScan = new File(rootProject.buildDir, "$basePath/palate/scan.json")
     def currentScan = new File(rootProject.buildDir, "$scanPath/smooth/scan.json")
+    def landmarksAlignmentFile = file("$landmarksAlignmentDir/$basePath/$palateId/landmarks.json")
 
     def destDir = new File(rootProject.buildDir, "$scanPath/$task.name")
 
-    def aligned = new File("$destDir/aligned.ply")
-    def minimizerOutput = new File("$destDir/minimizer.json")
+    def motion = new File("$destDir/motion.json")
+    def alignedMesh = new File("$destDir/aligned.ply")
 
-    // alignMatchedPalate depends on the initPalate and smooth tasks
+    // alignMatchedPalate depends on the initPalate and cropToVocalTract tasks
     def initPalate = ":projects:speaker:$dataset.name-$speaker:initPalate"
-    def smooth = ":projects:shared:$dataset.name-$speaker-$scan:smooth"
+    def cropToVocalTract = ":projects:shared:$dataset.name-$speaker-$scan:cropToVocalTract"
 
     dependsOn initPalate
-    dependsOn smooth
+    dependsOn cropToVocalTract
 
-    inputs.files palate, palateScan, currentScan
-    outputs.files aligned, minimizerOutput
+    inputs.files palate, palateScan, currentScan, landmarksAlignmentFile
+    outputs.files motion, alignedMesh
 
     doLast{
 
      destDir.mkdirs()
 
      def flags = (new FlagBuilder()).build(config.speaker.alignPalate)
-     flags.add("--sourceMesh $palate")
-     flags.add("--sourceScan $palateScan")
-     flags.add("--targetScan $currentScan")
-     flags.add("--output $aligned")
-     flags.add("--minimizerOutput $minimizerOutput")
+     flags.add("--source $palateScan")
+     flags.add("--target $currentScan")
+     flags.add("--landmarkFile $landmarksAlignmentFile")
+     flags.add("--output $motion")
 
-      def command = "scan-alignment ${flags.join(' ')}"
+      def command = "lucas-kanade ${flags.join(' ')}"
 
       logger.debug(command)
       logging.captureStandardOutput LogLevel.DEBUG
+
+      exec{
+        commandLine command.tokenize()
+        workingDir rootProject.buildDir
+      }
+
+
+      // apply motion
+      command = "apply-rigid-motion --input $palate --motion $motion --output $alignedMesh"
 
       exec{
         commandLine command.tokenize()
@@ -446,7 +457,7 @@ subprojects { subproject ->
 
     // input
     def matched = file("$rootProject.buildDir/$scanPath/matchTongue/tracking_org_result0.ply")
-    def tongueScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+    def tongueScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
 
     // output
     def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
@@ -540,22 +551,22 @@ subprojects { subproject ->
 
   task segmentTongue { task ->
 
-    description = "Segments a smoothed scan by using thresholding."
+    description = "Segments a scan by using thresholding."
 
     def speaker = config.speaker.name
     def scan = config.speaker.scan
     def dataset = config.speaker.dataset
     def scanPath = config.speaker.scanPath
 
-    def srcFile = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+    def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
     def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
     def segmentation = file("$destDir/segmentation.json")
     def cloudFile = file("$destDir/point_cloud.obj")
 
-    // segmentTongue depends on the smooth task
-    def smooth = ":projects:shared:$dataset.name-$speaker-$scan:smooth"
+    // segmentTongue depends on the cropToVocalTract task
+    def cropToVocalTract = ":projects:shared:$dataset.name-$speaker-$scan:cropToVocalTract"
 
-    dependsOn smooth
+    dependsOn cropToVocalTract
 
     inputs.file srcFile
     outputs.file segmentation
@@ -570,13 +581,24 @@ subprojects { subproject ->
 
       def command = ""
 
-      if( thresholdingType == "BASIC" ) {
+      switch(thresholdingType) {
 
-        def threshold = config.speaker.segmentTongue.threshold
-        command = "threshold --source $srcFile --threshold $threshold --output $segmentation --cloud $cloudFile"
-      }
-      else if( thresholdingType == "ADAPTIVE" ) {
-        command = "adaptive-threshold --source $srcFile --output $segmentation --cloud $cloudFile"
+        case "BASIC":
+
+          def threshold = config.speaker.segmentTongue.threshold
+              command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile"
+          break
+
+        case "OTSU":
+
+          command = "otsu-threshold --input $srcFile --output $segmentation --cloud $cloudFile"
+          break
+
+        default:
+
+          throw new Exception("Unknown thresholding type.")
+          break
+
       }
 
       logger.debug(command)
@@ -672,7 +694,7 @@ subprojects { subproject ->
 
     // input
     def aligned = file("$rootProject.buildDir/$scanPath/reconstructPalate/aligned.ply")
-    def palateScan = file("$rootProject.buildDir/$scanPath/smooth/scan.json")
+    def palateScan = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
 
     // output
     def destDir = file("$rootProject.buildDir/$scanPath/$task.name")
