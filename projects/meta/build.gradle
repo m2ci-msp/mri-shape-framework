@@ -670,7 +670,7 @@ subprojects { subproject ->
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  task createHTML {
+  task createTongueHTML {
 
     description = "Create webpage summarizing the visualizations."
 
