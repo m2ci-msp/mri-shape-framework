@@ -1,8 +1,10 @@
-# MSP Multilinear Tongue Model Gradle Framework
+# MRI shape framework
 
 ## Introduction
 
-This framework derives a multilinear tongue model from a given MRI dataset by performing the steps described in [*Hewer et al.*][1] in a minimally supervised way.
+Originally, this framework derives a multilinear tongue model from a given MRI dataset by performing the steps described in [*Hewer et al.*][1] in a minimally supervised way.
+Since then, we updated the approach somewhat, have a look at the [changelog][4] to learn about changes since the original release.
+
 Basically, this means that the framework automatically takes care of the dependencies between the different steps and calls the respective tools.
 As a user, you only have to provide the MRI data with labels and the settings you want to use for the dataset.
 
@@ -158,8 +160,11 @@ speaker {
 }
 ```
 
-Optionally, this folder can contain a *settings.groovy* file that overrides the [default settings](resources/settings/default.groovy).
-For example, you could provide for each speaker the region of interest of the associated scans:
+Here, **scans** is a list of names of the scans belonging to that speaker.
+**palateScan** refers to the name of the scan that is used for the palate estimation.
+
+This folder contains also a *settings.groovy* file that may override the [default settings](resources/settings/default.groovy).
+However, it should at least provide for each speaker the region of interest of the associated scans:
 
 ```groovy
 speaker {
@@ -220,6 +225,23 @@ For the palate, we have:
 Open the *blend files* in [resources/template](resources/template) with Blender to see where these landmarks are located on the template meshes. (They are stored in the form of *VertexGroups*)
 Basically, you can also add your own landmarks by modifying the blend files.
 We recommend using the *landmark-tool* of the [MSP MRI Shape Tools][2] to distribute the landmarks on the MRI scans.
+
+### Landmarks for palate reconstruction
+
+Additionally, we need landmarks on the scan that is used for the palate estimation.
+Their names can be arbitrary, their positions, however, should describe a bounding box of a scan region that can only undergo rigid motions.
+
+The files should be organized as follows:
+
+```sh
+.
+└── resources
+    └── landmarksAlignment
+        └── ${DATASET_NAME}
+            └── ${SPEAKER_NAME}
+                └── ${PALATE_SCAN_NAME}
+                    └── landmarks.json
+```
 
 ## Example Data
 
@@ -290,7 +312,7 @@ Plots of the results can then be found in
 Execute
 
 ```sh
-./gradlew createHTML
+./gradlew createTongueHTML
 ```
 
 to create HTML visualizations of the achieved results after the initial matching and at each boostrap iteration.
@@ -319,6 +341,14 @@ where `${COUNT}` is the number of the iteration.
 
 In both cases, you can start a HTML server in the corresponding subfolder and then inspect the results in your browser.
 
+The command
+
+```sh
+./gradlew createPalateHTML
+```
+
+produces visualizations of the matched and reconstructed palate meshes.
+
 ## License
 
 This work is licensed under the [MIT license](./LICENSE.md).
@@ -326,16 +356,22 @@ This work is licensed under the [MIT license](./LICENSE.md).
 If you are using our framework, please cite, for the time being, the following paper:
 
 ```bibtex
-@article{HewerWSR16,
-    author    = {Hewer, Alexander and Wuhrer, Stefanie and Steiner, Ingmar and Richmond, Korin},
-    title     = {A Multilinear Tongue Model Derived from Speech Related {MRI} Data of the Human Vocal Tract},
-    journal   = {CoRR},
-    volume    = {abs/1612.05005},
-    year      = {2016},
-    url       = {http://arxiv.org/abs/1612.05005}
+@article{Hewer2018CSL,
+  author = {Hewer, Alexander and Wuhrer, Stefanie and Steiner, Ingmar and Richmond, Korin},
+  doi = {10.1016/j.csl.2018.02.001},
+  eprint = {1612.05005},
+  eprinttype = {arxiv},
+  journal = {Computer Speech \& Language},
+  month = sep,
+  pages = {68-92},
+  title = {A Multilinear Tongue Model Derived from Speech Related {MRI} Data of the Human Vocal Tract},
+  url = {https://arxiv.org/abs/1612.05005},
+  volume = {51},
+  year = {2018}
 }
 ```
 
 [1]: http://arxiv.org/abs/1612.05005
 [2]: https://github.com/m2ci-msp/mri-shape-tools
 [3]: https://github.com/m2ci-msp/mri-shape-tools/blob/master/dataFormats/scan.md
+[4]:./CHANGELOG.md
