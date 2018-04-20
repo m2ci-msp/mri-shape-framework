@@ -118,6 +118,8 @@ task createTongueTemplateLandmarks {
     exec{
       commandLine "./extract_landmarks.py --input $inputFile --output $outputFile".tokenize()
       workingDir "$templateDir"
+      // blender may not free all memory blocks and report an error
+      ignoreExitValue = true
     }
   }
 
@@ -138,6 +140,8 @@ task createPalateTemplateLandmarks {
     exec{
       commandLine "./extract_landmarks.py --input $inputFile --output $outputFile".tokenize()
       workingDir "$templateDir"
+      // blender may not free all memory blocks and report an error
+      ignoreExitValue = true
     }
   }
 
