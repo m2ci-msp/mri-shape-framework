@@ -64,7 +64,7 @@ subprojects { subproject ->
         dependsOn rootProject.createPalateTemplateLandmarks
 
         inputs.files srcFile, templateLandmarksFile, scanFile
-        outputs.dir destFile
+        outputs.file destFile
 
         doLast{
 
