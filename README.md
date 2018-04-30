@@ -254,7 +254,7 @@ After the configuration is finished, you can run the following commands from the
 ### Deriving the Models
 
 ```sh
-    ./gradlew createFinalModel
+    ./gradlew createFinalTongueModel
     ./gradlew createFinalPalateModel
 ```
 

@@ -10,10 +10,14 @@
 - removed unneeded settings from [default settings][2]
 - swapped order: scan is first smoothed and then cropped (smoothed version can be used for palate reconstruction)
 - updated [README][3]
+- new [model-builder][4] functionality is now used to generate [JSON output][5]
+- renamed task: createFinalModel -> createFinalTongueModel
 
 [1]:https://github.com/m2ci-msp/mri-shape-tools/blob/master/lucas-kanade
 [2]:./resources/settings/default.groovy
 [3]:./README.md
+[4]:https://github.com/m2ci-msp/mri-shape-tools/blob/master/model-builder
+[5]:https://github.com/m2ci-msp/mri-shape-tools/blob/master/dataFormats/modelJson.md
 
 ## version 1.0
 
