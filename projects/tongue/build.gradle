@@ -44,7 +44,7 @@ subprojects { subproject ->
 
      destDir.mkdirs()
 
-     def flags = (new FlagBuilder()).build(config.speaker.alignPalate)
+     def flags = (new FlagBuilder()).build(config.speaker.reconstructPalate)
      flags.add("--source $palateScan")
      flags.add("--target $currentScan")
      flags.add("--landmarkFile $landmarksAlignmentFile")
@@ -358,7 +358,7 @@ subprojects { subproject ->
     doLast{
       destDir.mkdirs()
 
-      def flags = (new FlagBuilder()).build(config.speaker.match)
+      def flags = (new FlagBuilder()).build(config.speaker.matchTongue)
 
       flags.add("--source $templateFile")
       flags.add("--target $pointCloud")

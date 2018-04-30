@@ -23,7 +23,7 @@ speaker {
     sideDistance = 140
   }
 
-  match {
+  matchTongue {
     // size of neighborhood for smoothness term
     geodesicNeighbors = 2
     // chosen weight for smoothness term
@@ -60,7 +60,7 @@ speaker {
     maxDistance = 4
   }
 
-  alignPalate{
+  reconstructPalate{
 
     iterationAmount = 20
     convergenceFactor = 10000000
@@ -69,7 +69,7 @@ speaker {
 
   }
 
-  fitModel{
+  fitTongue{
     searchRadius = 4
     iterationAmount = 10
     priorSize = 0.5
@@ -80,7 +80,7 @@ speaker {
     maxDistance = 4
   }
 
-  fitPalateModel{
+  fitPalate{
     searchRadius = 4
     iterationAmount = 10
     priorSize = 1
@@ -90,6 +90,5 @@ speaker {
     maxAngle = 60
     maxDistance = 4
   }
-
 
 }

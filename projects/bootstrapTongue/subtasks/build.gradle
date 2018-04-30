@@ -15,15 +15,15 @@ subprojects { subproject ->
     def counter = config.bootstrapTongue.counter
 
     // get settings
-    def searchRadius = config.speaker.fitModel.searchRadius
-    def iterationAmount = config.speaker.fitModel.iterationAmount
-    def priorSize = config.speaker.fitModel.priorSize
-    def convergenceFactor = config.speaker.fitModel.convergenceFactor
-    def projectedGradientTolerance = config.speaker.fitModel.projectedGradientTolerance
-    def maxFunctionEvals = config.speaker.fitModel.maxFunctionEvals
+    def searchRadius = config.speaker.fitTongue.searchRadius
+    def iterationAmount = config.speaker.fitTongue.iterationAmount
+    def priorSize = config.speaker.fitTongue.priorSize
+    def convergenceFactor = config.speaker.fitTongue.convergenceFactor
+    def projectedGradientTolerance = config.speaker.fitTongue.projectedGradientTolerance
+    def maxFunctionEvals = config.speaker.fitTongue.maxFunctionEvals
 
-    def maxAngle = config.speaker.fitModel.maxAngle
-    def maxDistance = config.speaker.fitModel.maxDistance
+    def maxAngle = config.speaker.fitTongue.maxAngle
+    def maxDistance = config.speaker.fitTongue.maxDistance
 
     if( counter == 1){
       dependsOn ":projects:meta:$dataset.name:createTongueModel"
@@ -196,7 +196,7 @@ subprojects { subproject ->
     doLast{
       destDir.mkdirs()
 
-      def flags = (new FlagBuilder()).build(config.speaker.match)
+      def flags = (new FlagBuilder()).build(config.speaker.matchTongue)
 
       flags.add("--source $templateFile")
       flags.add("--target $pointCloud")

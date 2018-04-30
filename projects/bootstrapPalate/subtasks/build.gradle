@@ -144,15 +144,15 @@ subprojects { subproject ->
     def counter = config.bootstrapPalate.counter
 
     // get settings
-    def searchRadius = config.speaker.fitPalateModel.searchRadius
-    def iterationAmount = config.speaker.fitPalateModel.iterationAmount
-    def priorSize = config.speaker.fitPalateModel.priorSize
-    def convergenceFactor = config.speaker.fitPalateModel.convergenceFactor
-    def projectedGradientTolerance = config.speaker.fitPalateModel.projectedGradientTolerance
-    def maxFunctionEvals = config.speaker.fitPalateModel.maxFunctionEvals
+    def searchRadius = config.speaker.fitPalate.searchRadius
+    def iterationAmount = config.speaker.fitPalate.iterationAmount
+    def priorSize = config.speaker.fitPalate.priorSize
+    def convergenceFactor = config.speaker.fitPalate.convergenceFactor
+    def projectedGradientTolerance = config.speaker.fitPalate.projectedGradientTolerance
+    def maxFunctionEvals = config.speaker.fitPalate.maxFunctionEvals
 
-    def maxAngle = config.speaker.fitPalateModel.maxAngle
-    def maxDistance = config.speaker.fitPalateModel.maxDistance
+    def maxAngle = config.speaker.fitPalate.maxAngle
+    def maxDistance = config.speaker.fitPalate.maxDistance
 
     if( counter == 1){
       dependsOn ":projects:meta:$dataset.name:createPalateModel"
