@@ -418,7 +418,7 @@ subprojects { subproject ->
 
   ///////////////////////////////////////////////////////////////////////////
 
-  task createFinalModel{
+  task createFinalTongueModel{
 
     description = "Creates the final (possibly truncated) tongue model in YAML and JSON format."
 
@@ -426,13 +426,13 @@ subprojects { subproject ->
 
     def selectedIteration = config.bootstrapTongue.selectedIteration
 
-    def truncatedSpeaker = config.finalModel.truncatedSpeaker
-    def truncatedPhoneme = config.finalModel.truncatedPhoneme
+    def truncatedSpeaker = config.createFinalTongueModel.truncatedSpeaker
+    def truncatedPhoneme = config.createFinalTongueModel.truncatedPhoneme
 
     def training = "$rootProject.buildDir/$dataset.name/bootstrapTongue/$selectedIteration/training/tongue_training.yaml"
 
-    def outputYAML = file("$rootProject.buildDir/$dataset.name/finalModel/tongue_model.yaml")
-    def outputJSON = file("$rootProject.buildDir/$dataset.name/finalModel/tongue_model.json")
+    def outputYAML = file("$rootProject.buildDir/$dataset.name/createFinalTongueModel/tongue_model.yaml")
+    def outputJSON = file("$rootProject.buildDir/$dataset.name/createFinalTongueModel/tongue_model.json")
 
     inputs.file training
     outputs.files outputYAML, outputJSON
@@ -447,41 +447,13 @@ subprojects { subproject ->
       def flags = "--samples $training                  \
         --truncatedSpeaker $truncatedSpeaker            \
         --truncatedPhoneme $truncatedPhoneme            \
-        --output $outputYAML"
+        --output $outputYAML                            \
+        --jsonOutput $outputJSON"
 
       exec{
         commandLine "model-builder $flags".tokenize()
         workingDir rootProject.buildDir
       }
-
-
-      // create version in JSON format
-      def yaml = new Yaml()
-      def model = yaml.load(outputYAML.text);
-
-      def builder = new groovy.json.JsonBuilder()
-
-      def json = [:]
-      json["Dimensions"] = model["Dimensions"]
-      json["ShapeSpace"] = model["ShapeSpace"]
-      json["MeanWeights"] = model["MeanWeights"]
-
-      // read core tensor
-      def coreTensorBuffer =
-        ByteBuffer.wrap(model["CoreTensor"]).order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer()
-      def coreTensor = []
-
-      (1 .. coreTensorBuffer.capacity()).each{
-        coreTensor.add(coreTensorBuffer.get())
-      }
-
-      json["CoreTensor"] = coreTensor
-
-      builder(json)
-
-      outputJSON.withWriter{
-        it << builder.toPrettyString()
-      } // end withWriter
 
     } // end doLast
 
@@ -497,12 +469,12 @@ subprojects { subproject ->
 
     def selectedIteration = config.bootstrapPalate.selectedIteration
 
-    def truncatedSpeaker = config.finalPalateModel.truncatedSpeaker
+    def truncatedSpeaker = config.createFinalPalateModel.truncatedSpeaker
 
     def training = "$rootProject.buildDir/$dataset.name/bootstrapPalate/$selectedIteration/training/palate_training.yaml"
 
-    def outputYAML = file("$rootProject.buildDir/$dataset.name/finalPalateModel/palate_model.yaml")
-    def outputJSON = file("$rootProject.buildDir/$dataset.name/finalPalateModel/palate_model.json")
+    def outputYAML = file("$rootProject.buildDir/$dataset.name/createFinalPalateModel/palate_model.yaml")
+    def outputJSON = file("$rootProject.buildDir/$dataset.name/createFinalPalateModel/palate_model.json")
 
     inputs.file training
     outputs.files outputYAML, outputJSON
@@ -513,44 +485,15 @@ subprojects { subproject ->
 
       outputYAML.parentFile.mkdirs()
 
-      // create version in YAML format
       def flags = "--samples $training                  \
         --truncatedSpeaker $truncatedSpeaker            \
-        --output $outputYAML"
+        --output $outputYAML                            \
+        --jsonOutput $outputJSON"
 
       exec{
         commandLine "model-builder $flags".tokenize()
         workingDir rootProject.buildDir
       }
-
-
-      // create version in JSON format
-      def yaml = new Yaml()
-      def model = yaml.load(outputYAML.text);
-
-      def builder = new groovy.json.JsonBuilder()
-
-      def json = [:]
-      json["Dimensions"] = model["Dimensions"]
-      json["ShapeSpace"] = model["ShapeSpace"]
-      json["MeanWeights"] = model["MeanWeights"]
-
-      // read core tensor
-      def coreTensorBuffer =
-        ByteBuffer.wrap(model["CoreTensor"]).order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer()
-      def coreTensor = []
-
-      (1 .. coreTensorBuffer.capacity()).each{
-        coreTensor.add(coreTensorBuffer.get())
-      }
-
-      json["CoreTensor"] = coreTensor
-
-      builder(json)
-
-      outputJSON.withWriter{
-        it << builder.toPrettyString()
-      } // end withWriter
 
     } // end doLast
 

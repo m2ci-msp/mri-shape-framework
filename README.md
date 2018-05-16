@@ -126,13 +126,13 @@ evaluation{
 }
 
 // settings for the final tongue model
-finalModel{
+createFinalTongueModel{
   truncatedSpeaker = 5
   truncatedPhoneme = 4
 }
 
 // settings for the final palate model
-finalPalateModel{
+createFinalPalateModel{
   truncatedSpeaker = 11
 }
 
@@ -254,7 +254,7 @@ After the configuration is finished, you can run the following commands from the
 ### Deriving the Models
 
 ```sh
-    ./gradlew createFinalModel
+    ./gradlew createFinalTongueModel
     ./gradlew createFinalPalateModel
 ```
 
@@ -265,7 +265,7 @@ The results are afterwards available under
 .
 └── build
     └── ${DATASET_NAME}
-        └── finalModel
+        └── createFinalTongueModel
 ```
 
 and
@@ -274,7 +274,7 @@ and
 .
 └── build
     └── ${DATASET_NAME}
-        └── finalPalateModel
+        └── createFinalPalateModel
 ```
 
 In both cases, the model is output in YAML and JSON format.
