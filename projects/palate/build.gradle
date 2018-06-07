@@ -129,13 +129,13 @@ subprojects { subproject ->
         def destDir = file("$rootProject.buildDir/$scanPath/matchPalate")
 
         // template file
-        def templateFile = file("$rootProject.buildDir/$scanPath/alignPalateTemplate/alignedTemplate.ply")
-
+        //def templateFile = file("$rootProject.buildDir/$scanPath/alignPalateTemplate/alignedTemplate.ply")
+        def templateFile  = new File(templateDir, "${palateTemplateName}.ply")
         // matchPalate depends on the segmentPalate, landmarksPalate, and alignPalateTemplate task
 
         dependsOn "segmentPalate"
         dependsOn "landmarksPalate"
-        dependsOn "alignPalateTemplate"
+//        dependsOn "alignPalateTemplate"
 
         inputs.file pointCloud
         outputs.dir destDir
@@ -149,6 +149,7 @@ subprojects { subproject ->
             flags.add("--source $templateFile")
             flags.add("--target $pointCloud")
             flags.add("--output tracking_org_result0.ply")
+            flags.add("--performRigidAlignment")
 
             if( landmarkFile.exists() ) {
                 flags.add("--landmarks $landmarkFile")

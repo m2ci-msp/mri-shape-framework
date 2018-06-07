@@ -344,12 +344,13 @@ subprojects { subproject ->
     def destDir = file("$rootProject.buildDir/$scanPath/matchTongue")
 
     // template file
-    def templateFile  = file("$rootProject.buildDir/$scanPath/alignTongueTemplate/alignedTemplate.ply")
+    // def templateFile  = file("$rootProject.buildDir/$scanPath/alignTongueTemplate/alignedTemplate.ply")
+    def templateFile  = file("$templateDir/${tongueTemplateName}.ply")
 
     // matchTongue depends on the reconstructPalate, purgeCloud, landmarksTongue, and alignTongueTemplate task
     dependsOn "purgeCloud"
     dependsOn "landmarksTongue"
-    dependsOn "alignTongueTemplate"
+//    dependsOn "alignTongueTemplate"
     dependsOn "reconstructPalate"
 
     inputs.file pointCloud
@@ -363,6 +364,7 @@ subprojects { subproject ->
       flags.add("--source $templateFile")
       flags.add("--target $pointCloud")
       flags.add("--output tracking_org_result0.ply")
+      flags.add("--performRigidAlignment")
 
       if( landmarkFile.exists() ) {
         flags.add("--landmarks $landmarkFile")
