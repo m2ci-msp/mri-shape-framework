@@ -201,7 +201,6 @@ subprojects { subproject ->
       flags.add("--source $templateFile")
       flags.add("--target $pointCloud")
       flags.add("--output tracking_org_result0.ply")
-      flags.add("--performRigidAlignment")
 
       if( landmarkFile.exists() ) {
         flags.add("--landmarks $landmarkFile")
