@@ -5,9 +5,11 @@ speaker {
     // smoothing of structure tensor
     rho = 1
     // contrast parameter
-    lambda = 1
+    lambda = 0.1
     // explicit steps to take
-    iter = 5
+    iter = 20
+    // time step size
+    stepSize = 0.12
   }
 
   segmentTongue{
