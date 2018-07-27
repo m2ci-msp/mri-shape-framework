@@ -14,17 +14,6 @@ subprojects { subproject ->
     def dataset = config.speaker.dataset
     def counter = config.bootstrapTongue.counter
 
-    // get settings
-    def searchRadius = config.speaker.fitTongue.searchRadius
-    def iterationAmount = config.speaker.fitTongue.iterationAmount
-    def priorSize = config.speaker.fitTongue.priorSize
-    def convergenceFactor = config.speaker.fitTongue.convergenceFactor
-    def projectedGradientTolerance = config.speaker.fitTongue.projectedGradientTolerance
-    def maxFunctionEvals = config.speaker.fitTongue.maxFunctionEvals
-
-    def maxAngle = config.speaker.fitTongue.maxAngle
-    def maxDistance = config.speaker.fitTongue.maxDistance
-
     if( counter == 1){
       dependsOn ":projects:meta:$dataset.name:createTongueModel"
     }
@@ -57,30 +46,23 @@ subprojects { subproject ->
     outputs.file destFile
 
     doLast{
+
       destFile.parentFile.mkdirs()
 
-      def flags = "\
-                   --searchRadius $searchRadius \
-                   --iter $iterationAmount \
-                   --priorSize $priorSize \
-                   --convergenceFactor $convergenceFactor \
-                   --projectedGradientTolerance $projectedGradientTolerance \
-                   --maxFunctionEvals $maxFunctionEvals \
-                   --maxAngle $maxAngle \
-                   --maxDistance $maxDistance \
-                   --model $modelFile \
-                   --landmarks $landmarkFile \
-                   --target $pointCloud \
-                   --output $destFile"
+      def flags = (new FlagBuilder()).build(config.speaker.fitTongue)
 
-      logger.debug("fit-model $flags")
-      logging.captureStandardOutput LogLevel.DEBUG
+      flags.add("--model $modelFile")
+      flags.add("--target $pointCloud")
+      flags.add("--output $destFile")
+      flags.add("--landmarks $landmarkFile")
 
+      logger.debug("fit-model ${flags.join(' ')}")
 
       exec{
-        commandLine "fit-model $flags".tokenize()
+        commandLine "fit-model ${flags.join(' ')}".tokenize()
         workingDir destFile.parentFile
       }
+
     }
   }
   ////////////////////////////////////////////////////////////////////////////////////////////////////////

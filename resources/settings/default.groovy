@@ -73,7 +73,7 @@ speaker {
 
   fitTongue{
     searchRadius = 4
-    iterationAmount = 10
+    iter = 10
     priorSize = 0.5
     convergenceFactor = 10000000
     projectedGradientTolerance = 0.00001
@@ -84,7 +84,7 @@ speaker {
 
   fitPalate{
     searchRadius = 4
-    iterationAmount = 10
+    iter = 10
     priorSize = 1
     convergenceFactor = 10000000
     projectedGradientTolerance = 0.00001
