@@ -31,7 +31,7 @@ speaker {
     // chosen weight for smoothness term
     smoothnessTermWeight = 10
     smoothnessTermWeightEnd = 6
-    postSmoothnessTermWeight = 0.5
+    meshSmoothIterations = 1
     // weight for landmark term
     landmarkTermWeight = 0.1
     landmarkTermWeightEnd = 0
@@ -49,7 +49,7 @@ speaker {
     // chosen weight for smoothness term
     smoothnessTermWeight = 10
     smoothnessTermWeightEnd = 6
-    postSmoothnessTermWeight = 1
+    meshSmoothIterations = 1
     // weight for landmark term
     landmarkTermWeight = 10
     // do not deactivate landmark term -> avoids "shrinking"
@@ -75,6 +75,7 @@ speaker {
     searchRadius = 4
     iter = 10
     priorSize = 0.5
+    meshSmoothIterations = 1
     convergenceFactor = 10000000
     projectedGradientTolerance = 0.00001
     maxFunctionEvals = 1000
@@ -86,6 +87,7 @@ speaker {
     searchRadius = 4
     iter = 10
     priorSize = 1
+    meshSmoothIterations = 1
     convergenceFactor = 10000000
     projectedGradientTolerance = 0.00001
     maxFunctionEvals = 1000
