@@ -570,6 +570,15 @@ subprojects { subproject ->
 
     dependsOn cropToVocalTract
 
+    def thresholdingType = config.speaker.segmentTongue.thresholdingType
+
+    if(thresholdingType == "WITH LANDMARKS") {
+
+        dependsOn ":projects:speaker:${dataset.name}-$speaker:estimateTongueThreshold"
+        inputs.file file("$rootProject.buildDir/$dataset.name/$speaker/estimateTongueThreshold/threshold.json")
+
+    }
+
     inputs.file srcFile
     outputs.file segmentation
     outputs.file cloudFile
@@ -577,9 +586,6 @@ subprojects { subproject ->
 
     doLast{
       destDir.mkdirs()
-
-      // read necessary settings
-      def thresholdingType = config.speaker.segmentTongue.thresholdingType
 
       def command = ""
 
@@ -594,6 +600,16 @@ subprojects { subproject ->
         case "OTSU":
 
           command = "otsu-threshold --input $srcFile --output $segmentation --cloud $cloudFile"
+          break
+
+        case "WITH LANDMARKS":
+
+          def thresholdFile = file("$rootProject.buildDir/$dataset.name/$speaker/estimateTongueThreshold/threshold.json")
+
+          def threshold = (new groovy.json.JsonSlurper()).parse(thresholdFile).threshold
+
+          command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile"
+
           break
 
         default:
