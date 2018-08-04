@@ -612,7 +612,7 @@ subprojects { subproject ->
 
           break
 
-        case "WEIGHTED OTSU"
+        case "WEIGHTED OTSU":
 
           def weightInside = config.speaker.segmentTongue.weightInside
           def weightOutside = config.speaker.segmentTongue.weightOutside
