@@ -305,6 +305,15 @@ subprojects { subproject ->
 
                     break
 
+                case "WEIGHTED OTSU"
+
+                  def weightInside = config.speaker.segmentPalate.weightInside
+                  def weightOutside = config.speaker.segmentPalate.weightOutside
+
+                  command = "weighted-otsu-threshold --input $srcFile --weightInside ${weightInside} --weightOutside ${weightOutside} --output $segmentation --cloud $cloudFile --flip"
+
+                  break
+
                 default:
 
                     throw new Exception("Unknown thresholding type.")
