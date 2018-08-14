@@ -69,6 +69,7 @@ subprojects { subproject ->
       def command = "diffusion3D ${flags.join(' ')}"
 
       logger.debug(command)
+      rootProject.buildDir.mkdirs()
       exec{
         commandLine command.tokenize()
         workingDir rootProject.buildDir
