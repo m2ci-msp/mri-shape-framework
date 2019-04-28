@@ -129,13 +129,13 @@ subprojects { subproject ->
         def destDir = file("$rootProject.buildDir/$scanPath/matchPalate")
 
         // template file
-        def templateFile = file("$rootProject.buildDir/$scanPath/alignPalateTemplate/alignedTemplate.ply")
-
+        //def templateFile = file("$rootProject.buildDir/$scanPath/alignPalateTemplate/alignedTemplate.ply")
+        def templateFile  = new File(templateDir, "${palateTemplateName}.ply")
         // matchPalate depends on the segmentPalate, landmarksPalate, and alignPalateTemplate task
 
         dependsOn "segmentPalate"
         dependsOn "landmarksPalate"
-        dependsOn "alignPalateTemplate"
+//        dependsOn "alignPalateTemplate"
 
         inputs.file pointCloud
         outputs.dir destDir
@@ -149,6 +149,7 @@ subprojects { subproject ->
             flags.add("--source $templateFile")
             flags.add("--target $pointCloud")
             flags.add("--output tracking_org_result0.ply")
+            flags.add("--performRigidAlignment")
 
             if( landmarkFile.exists() ) {
                 flags.add("--landmarks $landmarkFile")
@@ -204,6 +205,45 @@ subprojects { subproject ->
 
     ///////////////////////////////////////////////////////////////////////////
 
+    task estimatePalateThreshold{
+
+        def speaker = config.speaker.name
+        def dataset = config.speaker.dataset
+        def scan = config.speaker.scan
+        def scanPath = config.speaker.scanPath
+
+        def srcFile = file("$rootProject.buildDir/$scanPath/cropToVocalTract/vocaltract.json")
+        def landmarkFile = file("$landmarksPalateDir/$scanPath/landmarks.json")
+        def outputFile = file("$rootProject.buildDir/$scanPath/estimatePalateThreshold/threshold.json")
+
+        def cropToVocalTract = ":projects:shared:$dataset.name-$speaker-$scan:cropToVocalTract"
+
+        dependsOn cropToVocalTract
+
+        inputs.file srcFile
+        inputs.file landmarkFile
+
+        outputs.file outputFile
+
+        doLast{
+
+            outputFile.parentFile.mkdirs()
+
+            def cmd = "estimate-threshold-with-landmarks --images ${srcFile} --landmarks ${landmarkFile} --scale_to_8bit --output $outputFile"
+
+            exec{
+
+                commandLine cmd.tokenize()
+                workingDir rootProject.buildDir
+
+            }
+
+        }
+
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+
     task segmentPalate { task ->
         description = "Segments a scan by using thresholding. The normals in the point cloud are inverted."
 
@@ -222,14 +262,23 @@ subprojects { subproject ->
 
         dependsOn cropToVocalTract
 
+        // read necessary settings
+        def thresholdingType = config.speaker.segmentPalate.thresholdingType
+
+
+        if(thresholdingType == "WITH LANDMARKS") {
+
+            dependsOn "estimatePalateThreshold"
+            inputs.file file("$rootProject.buildDir/$scanPath/estimatePalateThreshold/threshold.json")
+
+        }
+
         inputs.file srcFile
         outputs.dir destDir
 
         doLast{
             destDir.mkdirs()
 
-            // read necessary settings
-            def thresholdingType = config.speaker.segmentPalate.thresholdingType
 
             def command = ""
 
@@ -245,6 +294,25 @@ subprojects { subproject ->
 
                     command = "otsu-threshold --input $srcFile --output $segmentation --cloud $cloudFile --flip"
                     break
+
+                case "WITH LANDMARKS":
+
+                    def thresholdFile = file("$rootProject.buildDir/$scanPath/estimatePalateThreshold/threshold.json")
+
+                    def threshold = (new groovy.json.JsonSlurper()).parse(thresholdFile).threshold
+
+                    command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile --flip"
+
+                    break
+
+                case "WEIGHTED OTSU":
+
+                  def weightInside = config.speaker.segmentPalate.weightInside
+                  def weightOutside = config.speaker.segmentPalate.weightOutside
+
+                  command = "weighted-otsu-threshold --input $srcFile --weightInside ${weightInside} --weightOutside ${weightOutside} --output $segmentation --cloud $cloudFile --flip"
+
+                  break
 
                 default:
 

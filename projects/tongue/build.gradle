@@ -344,12 +344,13 @@ subprojects { subproject ->
     def destDir = file("$rootProject.buildDir/$scanPath/matchTongue")
 
     // template file
-    def templateFile  = file("$rootProject.buildDir/$scanPath/alignTongueTemplate/alignedTemplate.ply")
+    // def templateFile  = file("$rootProject.buildDir/$scanPath/alignTongueTemplate/alignedTemplate.ply")
+    def templateFile  = file("$templateDir/${tongueTemplateName}.ply")
 
     // matchTongue depends on the reconstructPalate, purgeCloud, landmarksTongue, and alignTongueTemplate task
     dependsOn "purgeCloud"
     dependsOn "landmarksTongue"
-    dependsOn "alignTongueTemplate"
+//    dependsOn "alignTongueTemplate"
     dependsOn "reconstructPalate"
 
     inputs.file pointCloud
@@ -363,6 +364,7 @@ subprojects { subproject ->
       flags.add("--source $templateFile")
       flags.add("--target $pointCloud")
       flags.add("--output tracking_org_result0.ply")
+      flags.add("--performRigidAlignment")
 
       if( landmarkFile.exists() ) {
         flags.add("--landmarks $landmarkFile")
@@ -568,6 +570,15 @@ subprojects { subproject ->
 
     dependsOn cropToVocalTract
 
+    def thresholdingType = config.speaker.segmentTongue.thresholdingType
+
+    if(thresholdingType == "WITH LANDMARKS") {
+
+        dependsOn ":projects:speaker:${dataset.name}-$speaker:estimateTongueThreshold"
+        inputs.file file("$rootProject.buildDir/$dataset.name/$speaker/estimateTongueThreshold/threshold.json")
+
+    }
+
     inputs.file srcFile
     outputs.file segmentation
     outputs.file cloudFile
@@ -575,9 +586,6 @@ subprojects { subproject ->
 
     doLast{
       destDir.mkdirs()
-
-      // read necessary settings
-      def thresholdingType = config.speaker.segmentTongue.thresholdingType
 
       def command = ""
 
@@ -593,6 +601,26 @@ subprojects { subproject ->
 
           command = "otsu-threshold --input $srcFile --output $segmentation --cloud $cloudFile"
           break
+
+        case "WITH LANDMARKS":
+
+          def thresholdFile = file("$rootProject.buildDir/$dataset.name/$speaker/estimateTongueThreshold/threshold.json")
+
+          def threshold = (new groovy.json.JsonSlurper()).parse(thresholdFile).threshold
+
+          command = "threshold --input $srcFile --threshold $threshold --scale_to_8bit --output $segmentation --cloud $cloudFile"
+
+          break
+
+        case "WEIGHTED OTSU":
+
+          def weightInside = config.speaker.segmentTongue.weightInside
+          def weightOutside = config.speaker.segmentTongue.weightOutside
+
+          command = "weighted-otsu-threshold --input $srcFile --weightInside ${weightInside} --weightOutside ${weightOutside} --output $segmentation --cloud $cloudFile"
+
+          break
+
 
         default:
 

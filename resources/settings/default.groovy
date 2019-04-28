@@ -5,9 +5,11 @@ speaker {
     // smoothing of structure tensor
     rho = 1
     // contrast parameter
-    lambda = 1
+    lambda = 0.1
     // explicit steps to take
-    iter = 5
+    iter = 20
+    // time step size
+    stepSize = 0.12
   }
 
   segmentTongue{
@@ -29,7 +31,7 @@ speaker {
     // chosen weight for smoothness term
     smoothnessTermWeight = 10
     smoothnessTermWeightEnd = 6
-    postSmoothnessTermWeight = 0.5
+    meshSmoothIterations = 1
     // weight for landmark term
     landmarkTermWeight = 0.1
     landmarkTermWeightEnd = 0
@@ -47,7 +49,7 @@ speaker {
     // chosen weight for smoothness term
     smoothnessTermWeight = 10
     smoothnessTermWeightEnd = 6
-    postSmoothnessTermWeight = 1
+    meshSmoothIterations = 1
     // weight for landmark term
     landmarkTermWeight = 10
     // do not deactivate landmark term -> avoids "shrinking"
@@ -71,8 +73,9 @@ speaker {
 
   fitTongue{
     searchRadius = 4
-    iterationAmount = 10
+    iter = 10
     priorSize = 0.5
+    meshSmoothIterations = 1
     convergenceFactor = 10000000
     projectedGradientTolerance = 0.00001
     maxFunctionEvals = 1000
@@ -82,8 +85,9 @@ speaker {
 
   fitPalate{
     searchRadius = 4
-    iterationAmount = 10
+    iter = 10
     priorSize = 1
+    meshSmoothIterations = 1
     convergenceFactor = 10000000
     projectedGradientTolerance = 0.00001
     maxFunctionEvals = 1000
